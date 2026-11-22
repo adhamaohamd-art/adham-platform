@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { AlertCircle, Check, Copy, CreditCard, Lock, UploadCloud } from 'lucide-react';
+import React from 'react';
+import { AlertCircle, Check, Copy, CreditCard, Hash, Lock, Smartphone } from 'lucide-react';
 import { useLanguage } from '../../hooks/useLanguage';
 import { formatPriceEGP } from '../../lib/helpers';
 import type { PaymentMethod, SiteSettings } from '../../types/models';
@@ -9,14 +9,15 @@ interface StepPaymentProps {
   totalPrice: number;
   paymentMethod: PaymentMethod;
   copiedField: string | null;
-  receiptFile: File | null;
-  receiptPreviewUrl: string | null;
-  receiptError: string | null;
+  senderAccount: string;
+  transactionRef: string;
+  proofError: string | null;
   submitError: string | null;
   submitting: boolean;
   onSelectPaymentMethod: (method: PaymentMethod) => void;
   onCopy: (key: string, value: string) => void;
-  onSelectReceipt: (file: File | null) => void;
+  onSenderAccountChange: (val: string) => void;
+  onTransactionRefChange: (val: string) => void;
   onBack: () => void;
   onConfirm: () => void;
 }
@@ -26,25 +27,27 @@ export function StepPayment({
   totalPrice,
   paymentMethod,
   copiedField,
-  receiptFile,
-  receiptPreviewUrl,
-  receiptError,
+  senderAccount,
+  transactionRef,
+  proofError,
   submitError,
   submitting,
   onSelectPaymentMethod,
   onCopy,
-  onSelectReceipt,
+  onSenderAccountChange,
+  onTransactionRefChange,
   onBack,
   onConfirm,
 }: StepPaymentProps) {
   const { lang, t } = useLanguage();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const canSubmit = senderAccount.trim().length >= 4 && transactionRef.trim().length >= 4;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-xl font-semibold text-[#14202B]">
-          {t('٤. التحويل ورفع صورة الإيصال', '4. Payment Transfer & Receipt Upload')}
+          {t('٤. التحويل وتأكيد بيانات العملية', '4. Payment Transfer & Transaction Details')}
         </h2>
         <span className="rounded-full bg-[#187B97] px-4 py-1.5 font-display text-sm font-bold tabular-nums text-white">
           {formatPriceEGP(totalPrice, lang)}
@@ -134,46 +137,59 @@ export function StepPayment({
         )}
       </div>
 
-      {/* Receipt upload */}
-      <div>
-        <label className="mb-2 block text-xs font-semibold text-[#14202B]">
-          {t('ارفع صورة إيصال التحويل (JPG / PNG / WebP) *', 'Upload Payment Receipt Screenshot *')}
-        </label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={(e) => onSelectReceipt(e.target.files?.[0] ?? null)}
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#187B97]/40 bg-white/80 p-6 text-center transition hover:bg-white"
-        >
-          <UploadCloud className="h-8 w-8 text-[#187B97]" />
-          <p className="mt-2 font-display text-sm font-semibold text-[#14202B]">
-            {receiptFile ? receiptFile.name : t('اضغط لاختيار صورة الإيصال', 'Tap to upload receipt image')}
-          </p>
-          <p className="mt-1 text-xs text-[#14202B]/60">
-            {t('يتم ضغط الصورة ورفعها بأمان على التخزين السحابي (بحد أقصى 2MB)', 'Compressed & uploaded securely to cloud storage (max 2MB)')}
-          </p>
-        </button>
+      {/* Payment transfer proof fields (Sender number/account + Transaction reference) */}
+      <div className="space-y-4 rounded-2xl border border-[#14202B]/12 bg-white p-4 sm:p-5">
+        <p className="text-xs font-semibold text-[#187B97]">
+          {t(
+            'بعد التحويل، اكتب بيانات العملية بالأسفل لمطابقتها وتأكيد حجزك فوراً:',
+            'After transferring, enter your sender number/address and transaction reference below:'
+          )}
+        </p>
 
-        {receiptPreviewUrl && (
-          <div className="mt-3 overflow-hidden rounded-2xl border border-[#14202B]/15 bg-white p-2">
-            <img
-              src={receiptPreviewUrl}
-              alt={t('معاينة الإيصال', 'Receipt preview')}
-              className="mx-auto max-h-56 rounded-xl object-contain"
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#14202B]">
+              <Smartphone className="h-3.5 w-3.5 text-[#187B97]" />
+              <span>
+                {paymentMethod === 'vodafone_cash'
+                  ? t('الرقم اللي حوّلت منه *', 'Sender Wallet Number *')
+                  : t('الرقم أو حساب إنستا باي المحوَّل منه *', 'Sender Phone or InstaPay IPA *')}
+              </span>
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              required
+              value={senderAccount}
+              onChange={(e) => onSenderAccountChange(e.target.value)}
+              placeholder={
+                paymentMethod === 'vodafone_cash' ? '010xxxxxxxx' : 'name@instapay / 010xxxxxxxx'
+              }
+              className="min-h-[46px] w-full rounded-xl border border-[#14202B]/20 bg-[#F6ECE1]/40 px-4 text-sm text-[#14202B] focus:border-[#187B97] focus:bg-white focus:outline-none"
             />
           </div>
-        )}
 
-        {receiptError && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-700">
+          <div>
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[#14202B]">
+              <Hash className="h-3.5 w-3.5 text-[#187B97]" />
+              <span>{t('رقم العملية / المرجع *', 'Transaction / Reference Number *')}</span>
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              required
+              value={transactionRef}
+              onChange={(e) => onTransactionRefChange(e.target.value)}
+              placeholder="مثال: 948271635"
+              className="min-h-[46px] w-full rounded-xl border border-[#14202B]/20 bg-[#F6ECE1]/40 px-4 text-sm font-semibold tabular-nums text-[#14202B] focus:border-[#187B97] focus:bg-white focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {proofError && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{receiptError}</span>
+            <span>{proofError}</span>
           </p>
         )}
       </div>
@@ -196,7 +212,7 @@ export function StepPayment({
         </button>
         <button
           type="button"
-          disabled={submitting || !receiptFile}
+          disabled={submitting || !canSubmit}
           onClick={onConfirm}
           className="inline-flex min-h-[48px] items-center gap-2 rounded-full bg-[#187B97] px-8 py-2.5 font-display text-sm font-bold text-white shadow-sm transition hover:bg-[#267688] disabled:opacity-50"
         >

@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { Plus, Save, Trash2 } from 'lucide-react';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, handleFirestoreError, OperationType, storage } from '../lib/firebase';
-import { compressImageFile, normalizePhoneDigits, sanitizeExternalUrl } from '../lib/helpers';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { normalizePhoneDigits, sanitizeExternalUrl } from '../lib/helpers';
 import { clearSiteDataCache } from '../hooks/useSiteData';
 import type { SiteSettings } from '../types/models';
 
@@ -20,20 +19,6 @@ export function SettingsManagerTab({
   useEffect(() => {
     setForm(settings);
   }, [settings]);
-
-  const handleTeacherPhoto = async (file: File | null) => {
-    if (!file) return;
-    try {
-      const { blob } = await compressImageFile(file, 960, 500 * 1024);
-      const storageRef = ref(storage, `public/teacher_photo_${Date.now()}.jpg`);
-      await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-      const url = await getDownloadURL(storageRef);
-      setForm((prev) => ({ ...prev, teacherPhotoUrl: url }));
-      onToast('تم رفع صورة المدرس على السحابة بنجاح — اضغط حفظ الإعدادات.');
-    } catch {
-      onToast('تعذر رفع الصورة على Firebase Storage. تأكد من تفعيل Storage وقواعده.');
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,10 +123,12 @@ export function SettingsManagerTab({
             <label className="mb-1 block text-xs font-semibold">صورة مستر أدهم في الهيرو (اختياري — لو فارغة تظهر الرسمة)</label>
             <div className="flex flex-wrap items-center gap-3">
               <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => void handleTeacherPhoto(e.target.files?.[0] ?? null)}
-                className="text-xs"
+                type="url"
+                dir="ltr"
+                value={form.teacherPhotoUrl}
+                onChange={(e) => setForm({ ...form, teacherPhotoUrl: e.target.value })}
+                placeholder="https://... (رابط صورة مباشر)"
+                className="min-h-[42px] flex-1 rounded-xl border border-[#14202B]/15 bg-[#F6ECE1]/50 px-3 text-sm"
               />
               {form.teacherPhotoUrl && (
                 <button

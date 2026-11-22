@@ -13,11 +13,9 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, handleFirestoreError, OperationType, storage, USE_FIREBASE_STORAGE } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import {
   buildLookupDocId,
-  compressImageFile,
   generateBookingCode,
   normalizePhoneDigits,
   sanitizeExternalUrl,
@@ -36,6 +34,7 @@ import type {
   Course,
   CoursePackage,
   PaymentMethod,
+  PaymentProof,
   Slot,
   SlotSummary,
   StudentDetails,
@@ -45,40 +44,6 @@ export class SlotUnavailableError extends Error {
   constructor(message = 'للأسف الميعاد ده اتحجز حالاً، اختار ميعاد تاني') {
     super(message);
     this.name = 'SlotUnavailableError';
-  }
-}
-
-export class StorageUploadError extends Error {
-  constructor(
-    message = 'تعذر رفع صورة الإيصال على السحابة حالياً. تأكد من تفعيل Firebase Storage والاتصال بالإنترنت ثم حاول مجدداً.'
-  ) {
-    super(message);
-    this.name = 'StorageUploadError';
-  }
-}
-
-/**
- * Compresses and uploads receipt image to Firebase Storage under `receipts/{bookingId}/...`.
- * Never silently dumps huge Base64 payloads into Firestore.
- */
-export async function uploadReceiptImage(file: File, bookingId: string): Promise<string> {
-  const { blob } = await compressImageFile(file, 1280, 680 * 1024);
-
-  if (!USE_FIREBASE_STORAGE) {
-    throw new StorageUploadError(
-      'خدمة رفع الإيصالات (Firebase Storage) غير مفعّلة في الإعدادات.'
-    );
-  }
-
-  try {
-    const storageRef = ref(storage, `receipts/${bookingId}/${Date.now()}.jpg`);
-    await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-    return await getDownloadURL(storageRef);
-  } catch (err) {
-    if (import.meta.env.DEV) {
-      console.error('Firebase Storage upload failed:', err);
-    }
-    throw new StorageUploadError();
   }
 }
 
@@ -104,8 +69,7 @@ export async function fetchAvailableSlotsForCourse(courseId: string): Promise<Sl
       id: d.id,
       ...(d.data() as Omit<Slot, 'id'>),
     }));
-  } catch (err) {
-    // Fallback query without composite index if user has not created the index yet
+  } catch {
     try {
       const qSimple = query(
         collection(db, 'slots'),
@@ -136,14 +100,13 @@ export interface CreateBookingInput {
   selectedSlots: Slot[];
   student: StudentDetails;
   paymentMethod: PaymentMethod;
-  receiptFile: File;
+  paymentProof: PaymentProof;
 }
 
 export interface CreatedBookingResult {
   bookingId: string;
   code: string;
   slotSummaries: SlotSummary[];
-  receiptUrl: string;
 }
 
 export async function submitBookingTransaction(
@@ -152,7 +115,11 @@ export async function submitBookingTransaction(
   const bookingId = `bk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const code = generateBookingCode();
   const normalizedWhatsapp = normalizePhoneDigits(input.student.whatsapp);
-  const receiptUrl = await uploadReceiptImage(input.receiptFile, bookingId);
+
+  const cleanProof: PaymentProof = {
+    senderAccount: input.paymentProof.senderAccount.trim(),
+    transactionRef: input.paymentProof.transactionRef.trim(),
+  };
 
   const slotSummaries: SlotSummary[] = input.selectedSlots.map((s) => ({
     slotId: s.id,
@@ -166,7 +133,6 @@ export async function submitBookingTransaction(
 
   try {
     await runTransaction(db, async (tx) => {
-      // 1. Re-read EVERY chosen slot inside the transaction to prevent double-booking
       const slotRefs = input.selectedSlots.map((slot) => doc(db, 'slots', slot.id));
       const slotSnaps = await Promise.all(slotRefs.map((r) => tx.get(r)));
 
@@ -180,7 +146,6 @@ export async function submitBookingTransaction(
         }
       }
 
-      // 2. Write booking document
       tx.set(bookingRef, {
         code,
         courseId: input.course.id,
@@ -200,14 +165,14 @@ export async function submitBookingTransaction(
         },
         amount: input.selectedPackage.price,
         paymentMethod: input.paymentMethod,
-        receiptUrl,
+        paymentProof: cleanProof,
+        receiptUrl: '',
         status: 'pending_review',
         rejectionReason: '',
         classLink: '',
         createdAt: serverTimestamp(),
       });
 
-      // 3. Write PII-minimal public tracking document atomically
       tx.set(lookupRef, {
         bookingId,
         code,
@@ -225,7 +190,6 @@ export async function submitBookingTransaction(
         createdAt: serverTimestamp(),
       });
 
-      // 4. Mark all chosen slots as 'pending' atomically
       for (const slotRef of slotRefs) {
         tx.update(slotRef, {
           status: 'pending',
@@ -238,10 +202,9 @@ export async function submitBookingTransaction(
       bookingId,
       code,
       slotSummaries,
-      receiptUrl,
     };
   } catch (err) {
-    if (err instanceof SlotUnavailableError || err instanceof StorageUploadError) {
+    if (err instanceof SlotUnavailableError) {
       throw err;
     }
     handleFirestoreError(err, OperationType.WRITE, `bookings/${bookingId}`);

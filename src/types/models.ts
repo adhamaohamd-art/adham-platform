@@ -18,6 +18,11 @@ export interface CoursePackage {
   isActive?: boolean;
 }
 
+export interface PaymentProof {
+  senderAccount: string;
+  transactionRef: string;
+}
+
 export interface AboutItem {
   id: string;
   icon: 'experience' | 'method' | 'followup';
@@ -137,6 +142,7 @@ export interface Booking {
   student: StudentDetails;
   amount: number;
   paymentMethod: PaymentMethod;
+  paymentProof?: PaymentProof;
   receiptUrl: string;
   status: BookingStatus;
   rejectionReason: string;

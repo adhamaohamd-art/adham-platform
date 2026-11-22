@@ -2,7 +2,9 @@ import React from 'react';
 import {
   CheckCircle2,
   ExternalLink,
+  Hash,
   Search,
+  Smartphone,
   XCircle,
   ZoomIn,
 } from 'lucide-react';
@@ -53,7 +55,9 @@ export function BookingsAndReceiptsTab({
             b.code.toLowerCase().includes(q) ||
             b.student.name.toLowerCase().includes(q) ||
             b.student.whatsapp.includes(q) ||
-            b.courseTitle.toLowerCase().includes(q)
+            b.courseTitle.toLowerCase().includes(q) ||
+            (b.paymentProof?.transactionRef ?? '').toLowerCase().includes(q) ||
+            (b.paymentProof?.senderAccount ?? '').toLowerCase().includes(q)
           );
         });
 
@@ -62,12 +66,12 @@ export function BookingsAndReceiptsTab({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-xl font-semibold text-[#14202B]">
-            {mode === 'receipts' ? 'مراجعة الإيصالات المعلقة' : 'سجل الحجوزات'}
+            {mode === 'receipts' ? 'مراجعة التحويلات المعلقة' : 'سجل الحجوزات'}
           </h2>
           <p className="text-xs text-[#14202B]/70">
             {mode === 'receipts'
-              ? 'راجع صورة الإيصال وأكّد الحجز بإضافة رابط Zoom/Meet، أو ارفض لتحرير المواعيد تلقائياً.'
-              : 'بحث وفلترة الحجوزات مع تحميل تدريجي (Pagination) للحفاظ على سرعة اللوحة.'}
+              ? 'طابق الرقم المحوَّل منه ورقم العملية مع محفظتك وأكّد الحجز بإضافة رابط الحصة، أو ارفض لتحرير المواعيد تلقائياً.'
+              : 'ابحث بالاسم أو الكود أو رقم الواتساب أو رقم العملية مع تحميل تدريجي (Pagination).'}
           </p>
         </div>
 
@@ -79,7 +83,7 @@ export function BookingsAndReceiptsTab({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="بحث بالاسم / الكود / الرقم..."
+                placeholder="بحث بالاسم / الكود / رقم العملية..."
                 className="min-h-[40px] rounded-full border border-[#14202B]/15 bg-white ps-9 pe-4 text-xs"
               />
             </div>
@@ -99,7 +103,7 @@ export function BookingsAndReceiptsTab({
 
       {list.length === 0 ? (
         <div className="rounded-[24px] bg-white p-8 text-center text-sm text-[#14202B]/70 card-shadow">
-          {mode === 'receipts' ? 'لا توجد إيصالات معلقة للمراجعة حالياً.' : 'لا توجد حجوزات مطابقة للبحث.'}
+          {mode === 'receipts' ? 'لا توجد تحويلات معلقة للمراجعة حالياً.' : 'لا توجد حجوزات مطابقة للبحث.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -191,6 +195,32 @@ export function BookingsAndReceiptsTab({
                     )}
                   </div>
 
+                  {/* Text Payment Proof Box */}
+                  {booking.paymentProof && (
+                    <div className="rounded-xl border border-[#187B97]/25 bg-[#187B97]/5 p-3 text-xs space-y-1.5">
+                      <p className="font-bold text-[#187B97]">بيانات التحويل للمطابقة:</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-[#14202B]/75">
+                          <Smartphone className="h-3.5 w-3.5 text-[#187B97]" />
+                          المحوَّل منه:
+                        </span>
+                        <span dir="ltr" className="font-bold tabular-nums text-[#14202B]">
+                          {booking.paymentProof.senderAccount}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-[#14202B]/75">
+                          <Hash className="h-3.5 w-3.5 text-[#187B97]" />
+                          رقم العملية:
+                        </span>
+                        <span dir="ltr" className="rounded bg-white px-2 py-0.5 font-mono font-bold text-[#187B97]">
+                          {booking.paymentProof.transactionRef}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Legacy receipt image fallback if any older bookings had one */}
                   {safeReceipt && (
                     <button
                       type="button"

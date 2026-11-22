@@ -62,9 +62,9 @@ export function BookingPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('vodafone_cash');
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
-  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [senderAccount, setSenderAccount] = useState('');
+  const [transactionRef, setTransactionRef] = useState('');
+  const [proofError, setProofError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<CreatedBookingResult | null>(null);
@@ -79,7 +79,6 @@ export function BookingPage() {
     defaultValues: { name: '', grade: '', whatsapp: '', parentName: '', notes: '' },
   });
 
-  // Pre-select course from query string or first active course
   useEffect(() => {
     if (courses.length === 0) return;
     const queryCourse = searchParams.get('course');
@@ -105,7 +104,6 @@ export function BookingPage() {
     return coursePackages.find((p) => p.id === selectedPackageId) ?? coursePackages[0];
   }, [coursePackages, selectedPackageId]);
 
-  // Sync package, mode, and fetch bounded available slots ONLY for the selected course
   useEffect(() => {
     if (!selectedCourse) return;
     const pkgs = getCoursePackages(selectedCourse);
@@ -216,25 +214,23 @@ export function BookingPage() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleSelectReceipt = (file: File | null) => {
-    setReceiptError(null);
-    if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setReceiptError(t('مسموح فقط بصور JPG أو PNG أو WebP.', 'Only JPG, PNG, or WebP images are allowed.'));
-      return;
-    }
-    if (file.size > 6 * 1024 * 1024) {
-      setReceiptError(t('حجم الصورة كبير جداً (الحد الأقصى 6MB قبل الضغط).', 'Image is too large (max 6MB).'));
-      return;
-    }
-    if (receiptPreviewUrl) URL.revokeObjectURL(receiptPreviewUrl);
-    setReceiptFile(file);
-    setReceiptPreviewUrl(URL.createObjectURL(file));
-  };
-
   const handleFinalSubmit = async () => {
-    if (!selectedCourse || !selectedPackage || !receiptFile) return;
+    if (!selectedCourse || !selectedPackage) return;
+    setProofError(null);
     setSubmitError(null);
+
+    const cleanSender = senderAccount.trim();
+    const cleanRef = transactionRef.trim();
+    if (cleanSender.length < 4 || cleanRef.length < 4) {
+      setProofError(
+        t(
+          'من فضلك اكتب الرقم/الحساب المحوَّل منه ورقم العملية بشكل صحيح.',
+          'Please enter a valid sender number/account and transaction reference.'
+        )
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const studentValues = getValues();
@@ -245,14 +241,16 @@ export function BookingPage() {
         selectedSlots,
         student: studentValues,
         paymentMethod,
-        receiptFile,
+        paymentProof: {
+          senderAccount: cleanSender,
+          transactionRef: cleanRef,
+        },
       });
       setConfirmation(result);
     } catch (err) {
       if (err instanceof SlotUnavailableError) {
         setSubmitError(err.message);
         setStep(2);
-        // Reload fresh slots for the course
         const refreshed = await fetchAvailableSlotsForCourse(selectedCourse.id).catch(() => []);
         setCourseSlots(refreshed);
         setSelectedSlotIds([]);
@@ -309,7 +307,6 @@ export function BookingPage() {
           ) : (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
               <div className="rounded-[28px] bg-[#F6ECE1] p-5 text-[#14202B] card-shadow sm:p-7 lg:col-span-8">
-                {/* Step indicator */}
                 <div className="mb-6 flex items-center justify-between gap-2 border-b border-[#14202B]/10 pb-4 text-xs font-semibold">
                   {[
                     { n: 1, label: t('الصف والباقة', 'Course') },
@@ -379,21 +376,27 @@ export function BookingPage() {
                     totalPrice={selectedPackage?.price ?? 0}
                     paymentMethod={paymentMethod}
                     copiedField={copiedField}
-                    receiptFile={receiptFile}
-                    receiptPreviewUrl={receiptPreviewUrl}
-                    receiptError={receiptError}
+                    senderAccount={senderAccount}
+                    transactionRef={transactionRef}
+                    proofError={proofError}
                     submitError={submitError}
                     submitting={submitting}
                     onSelectPaymentMethod={setPaymentMethod}
                     onCopy={handleCopy}
-                    onSelectReceipt={handleSelectReceipt}
+                    onSenderAccountChange={(v) => {
+                      setSenderAccount(v);
+                      if (proofError) setProofError(null);
+                    }}
+                    onTransactionRefChange={(v) => {
+                      setTransactionRef(v);
+                      if (proofError) setProofError(null);
+                    }}
                     onBack={() => setStep(3)}
                     onConfirm={() => void handleFinalSubmit()}
                   />
                 )}
               </div>
 
-              {/* Compact Order Summary Sidebar */}
               <aside className="h-fit rounded-[28px] bg-white p-5 text-[#14202B] card-shadow lg:col-span-4">
                 <h3 className="font-display text-base font-semibold text-[#14202B]">
                   {t('ملخص الحجز', 'Booking Summary')}

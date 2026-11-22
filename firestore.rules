@@ -16,8 +16,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Admin check strictly via Firebase Custom Claims OR Firestore admins/{uid}
-    // (No personal email hardcoded in repository)
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.admin == true
@@ -55,6 +53,14 @@ service cloud.firestore {
 
     function isSafeHttpsOrEmpty(url, maxLen) {
       return url is string && (url == '' || (url.size() <= maxLen && url.matches('^https://.+')));
+    }
+
+    function isValidPaymentProof(proof) {
+      return proof is map
+        && proof.keys().hasAll(['senderAccount', 'transactionRef'])
+        && proof.keys().hasOnly(['senderAccount', 'transactionRef'])
+        && proof.senderAccount is string && proof.senderAccount.size() >= 4 && proof.senderAccount.size() <= 100
+        && proof.transactionRef is string && proof.transactionRef.size() >= 4 && proof.transactionRef.size() <= 80;
     }
 
     // =========================================================================
@@ -137,13 +143,14 @@ service cloud.firestore {
     function isValidBooking(data) {
       return data.keys().hasAll([
           'code', 'courseId', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
-          'mode', 'slotIds', 'student', 'amount', 'paymentMethod', 'receiptUrl',
-          'status', 'rejectionReason', 'classLink', 'createdAt'
+          'mode', 'slotIds', 'student', 'amount', 'paymentMethod', 'paymentProof',
+          'receiptUrl', 'status', 'rejectionReason', 'classLink', 'createdAt'
         ])
         && data.keys().hasOnly([
           'code', 'courseId', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
           'packageType', 'mode', 'slotIds', 'slotSummaries', 'student', 'amount',
-          'paymentMethod', 'receiptUrl', 'status', 'rejectionReason', 'classLink', 'createdAt'
+          'paymentMethod', 'paymentProof', 'receiptUrl', 'status', 'rejectionReason',
+          'classLink', 'createdAt'
         ])
         && isValidBookingCode(data.code)
         && isValidId(data.courseId)
@@ -158,8 +165,8 @@ service cloud.firestore {
         && isValidStudentMap(data.student)
         && data.amount is number && data.amount >= 0 && data.amount <= 100000
         && data.paymentMethod in ['vodafone_cash', 'instapay']
-        // Enforce cloud storage HTTPS URLs only — block raw Base64 blobs in Firestore
-        && data.receiptUrl is string && data.receiptUrl.matches('^https://.+') && data.receiptUrl.size() <= 1500
+        && isValidPaymentProof(data.paymentProof)
+        && isSafeHttpsOrEmpty(data.receiptUrl, 1500)
         && data.status in ['pending_review', 'confirmed', 'rejected', 'cancelled']
         && data.rejectionReason is string && data.rejectionReason.size() <= 400
         && isSafeHttpsOrEmpty(data.classLink, 500)
@@ -232,7 +239,6 @@ service cloud.firestore {
 
     match /slots/{slotId} {
       allow get: if isValidId(slotId);
-      // Public queries can list available future slots; admins can list all
       allow list: if resource.data.status == 'available' || isAdmin();
       allow create: if isValidId(slotId) && isValidSlot(incoming()) && isAdmin();
       allow update: if isValidId(slotId) && isValidSlot(incoming()) && (
@@ -297,7 +303,6 @@ service cloud.firestore {
       allow delete: if isValidId(testimonialId) && isAdmin();
     }
 
-    // Lead form removed from FAQ — close anonymous spam vector while letting Admin manage legacy leads
     match /leads/{leadId} {
       allow get, list, delete: if isAdmin();
       allow create, update: if false;
