@@ -448,7 +448,7 @@ export function AdminDashboardPage() {
           />
         )}
 
-        {activeTab === 'slots' && <SlotsManagerTab courses={courses} slots={slots} onToast={showToast} />}
+        {activeTab === 'slots' && <SlotsManagerTab courses={courses} slots={slots} bookings={bookings} onToast={showToast} />}
         {activeTab === 'courses' && <CoursesManagerTab courses={courses} onToast={showToast} />}
         {activeTab === 'testimonials' && (
           <TestimonialsManagerTab testimonials={testimonials} onToast={showToast} />

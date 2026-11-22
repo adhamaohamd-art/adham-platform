@@ -33,6 +33,10 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // firebase is a single large vendor chunk by design (lazy-loaded routes keep the rest small)
+      chunkSizeWarningLimit: 800,
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

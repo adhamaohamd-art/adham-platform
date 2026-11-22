@@ -7,10 +7,10 @@
 2. انسخ ملف `.env.example` إلى ملف جديد باسم `.env` وضع فيه مفاتيح مشروع Firebase الخاص بك من **Firebase Console > Project Settings > General > Your apps**.
 3. شغّل الأوامر التالية في Terminal:
    ```bash
-   npm install
-   npm run lint
-   npm run test
-   npm run dev
+   bun install        # أو npm install
+   bun run lint       # فحص TypeScript
+   bun run test
+   bun run dev
    ```
 
 ## 2. خطوات التأمين الأساسية في Firebase Console (مهم جداً قبل الإطلاق)
@@ -19,7 +19,7 @@
    - سجّل دخول مرة واحدة أو انسخ الـ **User UID** الخاص بحسابك من `Authentication > Users`.
    - افتح `Firestore Database` وأنشئ Collection باسم `admins`، ثم أنشئ مستند الـ **Document ID** بتاعه هو الـ `UID` بتاعك، وضيف فيه حقل:
      - `email`: `"بريدك@gmail.com"`
-3. **رفع قواعد الأمان (`firestore.rules` و `storage.rules`):**
+3. **رفع قواعد الأمان (`firestore.rules` و `storage.rules`)** — أو بالأمر `firebase deploy --only firestore:rules,storage`:
    - انسخ محتوى ملف `firestore.rules` في `Firestore Database > Rules` واضغط **Publish**.
    - فعّل **Firebase Storage** وانسخ محتوى `storage.rules` في `Storage > Rules` واضغط **Publish**.
 4. **تفعيل Firebase App Check (لمنع البوتات من تجميد المواعيد):**
@@ -32,8 +32,10 @@
 ## 3. الرفع على Cloudflare Pages (لتحمل آلاف الزوار مجاناً)
 1. ارفع المشروع على مستودع GitHub خاص (Private Repo) وتأكد أن ملف `.env` غير مرفوع (موجود في `.gitignore`).
 2. في **Cloudflare Dashboard > Workers & Pages > Create > Pages**:
-   - **Build command:** `npm run build`
+   - **Build command:** `bun run build` (أو `npm run build`)
    - **Build output directory:** `dist`
+   - ملف `.node-version` بيحدد Node 22 تلقائياً، وملف `bun.lock` لازم يفضل متزامن مع `package.json`.
+   - لو غيّرت `package.json` شغّل `bun install` وارفع `bun.lock` الجديد، وإلا هيفشل الـ build بخطأ `lockfile had changes, but lockfile is frozen`.
    - أضف جميع متغيرات `.env` (`VITE_FIREBASE_*` و`VITE_RECAPTCHA_SITE_KEY`) في **Environment Variables**.
 3. اربط الدومين `adham-teach.online` وفعّل **Bot Fight Mode** من `Security > Bots` في Cloudflare.
 
