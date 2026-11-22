@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true
+        || request.auth.token.role == 'admin'
+        || firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    // Payment receipts: upload allowed for booking submissions (max 2MB image),
+    // read/delete strictly restricted to authenticated Admins.
+    match /receipts/{bookingId}/{fileName} {
+      allow create: if isValidImageUpload();
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // Public site assets (teacher photo, testimonial screenshots): admin write, public read
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidImageUpload();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

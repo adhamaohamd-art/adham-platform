@@ -1,0 +1,313 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // =========================================================================
+    // GLOBAL DEFAULT-DENY SAFETY NET
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // HARDENED PRIMITIVE HELPERS
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Admin check strictly via Firebase Custom Claims OR Firestore admins/{uid}
+    // (No personal email hardcoded in repository)
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true
+        || request.auth.token.role == 'admin'
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isEgyptianPhone(phone) {
+      return phone is string && phone.size() == 11 && phone.matches('^01[0125][0-9]{8}$');
+    }
+
+    function isValidBookingCode(code) {
+      return code is string && code.size() >= 9 && code.size() <= 12 && code.matches('^ADM-[A-Z0-9]{5,8}$');
+    }
+
+    function isValidLookupId(lookupId) {
+      return lookupId is string
+        && lookupId.size() >= 21
+        && lookupId.size() <= 24
+        && lookupId.matches('^ADM-[A-Z0-9]{5,8}_01[0125][0-9]{8}$');
+    }
+
+    function isSafeHttpsOrEmpty(url, maxLen) {
+      return url is string && (url == '' || (url.size() <= maxLen && url.matches('^https://.+')));
+    }
+
+    // =========================================================================
+    // VALIDATION BLUEPRINTS
+    // =========================================================================
+    function isValidSettings(data) {
+      return data.keys().hasAll(['whatsapp', 'heroTitle', 'heroSubtitle', 'aboutItems', 'stats', 'faq'])
+        && data.keys().hasOnly([
+          'whatsapp', 'vodafoneCash', 'instaPay', 'heroTitle', 'heroTitleEn',
+          'heroSubtitle', 'heroSubtitleEn', 'aboutTitle', 'aboutTitleEn',
+          'aboutItems', 'stats', 'videoUrl', 'teacherPhotoUrl',
+          'socials', 'faq', 'cancellationPolicy', 'cancellationPolicyEn'
+        ])
+        && isEgyptianPhone(data.whatsapp)
+        && (!('vodafoneCash' in data) || (data.vodafoneCash is string && data.vodafoneCash.size() <= 60))
+        && (!('instaPay' in data) || (data.instaPay is string && data.instaPay.size() <= 120))
+        && data.heroTitle is string && data.heroTitle.size() >= 2 && data.heroTitle.size() <= 160
+        && (!('heroTitleEn' in data) || (data.heroTitleEn is string && data.heroTitleEn.size() <= 160))
+        && data.heroSubtitle is string && data.heroSubtitle.size() >= 2 && data.heroSubtitle.size() <= 400
+        && (!('heroSubtitleEn' in data) || (data.heroSubtitleEn is string && data.heroSubtitleEn.size() <= 400))
+        && (!('aboutTitle' in data) || (data.aboutTitle is string && data.aboutTitle.size() <= 120))
+        && (!('aboutTitleEn' in data) || (data.aboutTitleEn is string && data.aboutTitleEn.size() <= 120))
+        && data.aboutItems is list && data.aboutItems.size() <= 6
+        && data.stats is list && data.stats.size() <= 6
+        && (!('videoUrl' in data) || isSafeHttpsOrEmpty(data.videoUrl, 500))
+        && (!('teacherPhotoUrl' in data) || isSafeHttpsOrEmpty(data.teacherPhotoUrl, 1500))
+        && (!('socials' in data) || data.socials is map)
+        && data.faq is list && data.faq.size() <= 20
+        && (!('cancellationPolicy' in data) || (data.cancellationPolicy is string && data.cancellationPolicy.size() <= 600))
+        && (!('cancellationPolicyEn' in data) || (data.cancellationPolicyEn is string && data.cancellationPolicyEn.size() <= 600));
+    }
+
+    function isValidCourse(data) {
+      return data.keys().hasAll([
+          'title', 'tag', 'description', 'mode', 'packages',
+          'sessionDurationMinutes', 'capacity', 'isActive', 'order'
+        ])
+        && data.keys().hasOnly([
+          'title', 'titleEn', 'tag', 'tagEn', 'description', 'descriptionEn',
+          'mode', 'packages', 'allowedPackages', 'prices', 'sessionDurationMinutes',
+          'capacity', 'illustration', 'isActive', 'order'
+        ])
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 140
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 140))
+        && data.tag is string && data.tag.size() >= 1 && data.tag.size() <= 40
+        && (!('tagEn' in data) || (data.tagEn is string && data.tagEn.size() <= 40))
+        && data.description is string && data.description.size() <= 360
+        && (!('descriptionEn' in data) || (data.descriptionEn is string && data.descriptionEn.size() <= 360))
+        && data.mode in ['online', 'offline', 'both']
+        && data.packages is list && data.packages.size() >= 1 && data.packages.size() <= 12
+        && data.sessionDurationMinutes is number && data.sessionDurationMinutes >= 15 && data.sessionDurationMinutes <= 240
+        && data.capacity is number && data.capacity >= 1 && data.capacity <= 100
+        && (!('illustration' in data) || data.illustration in ['clock', 'books', 'chart'])
+        && data.isActive is bool
+        && data.order is number && data.order >= 0 && data.order <= 999;
+    }
+
+    function isValidSlot(data) {
+      return data.keys().hasAll(['courseId', 'startAt', 'endAt', 'status'])
+        && data.keys().hasOnly(['courseId', 'startAt', 'endAt', 'status', 'bookingId'])
+        && isValidId(data.courseId)
+        && data.startAt is timestamp
+        && data.endAt is timestamp
+        && data.endAt > data.startAt
+        && data.status in ['available', 'pending', 'booked', 'closed']
+        && (!('bookingId' in data) || data.bookingId == null || (data.bookingId is string && isValidId(data.bookingId)));
+    }
+
+    function isValidStudentMap(student) {
+      return student is map
+        && student.keys().hasAll(['name', 'grade', 'whatsapp'])
+        && student.keys().hasOnly(['name', 'grade', 'whatsapp', 'parentName', 'notes'])
+        && student.name is string && student.name.size() >= 2 && student.name.size() <= 120
+        && student.grade is string && student.grade.size() >= 1 && student.grade.size() <= 80
+        && isEgyptianPhone(student.whatsapp)
+        && (!('parentName' in student) || (student.parentName is string && student.parentName.size() <= 120))
+        && (!('notes' in student) || (student.notes is string && student.notes.size() <= 600));
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+          'code', 'courseId', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
+          'mode', 'slotIds', 'student', 'amount', 'paymentMethod', 'receiptUrl',
+          'status', 'rejectionReason', 'classLink', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'code', 'courseId', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
+          'packageType', 'mode', 'slotIds', 'slotSummaries', 'student', 'amount',
+          'paymentMethod', 'receiptUrl', 'status', 'rejectionReason', 'classLink', 'createdAt'
+        ])
+        && isValidBookingCode(data.code)
+        && isValidId(data.courseId)
+        && data.courseTitle is string && data.courseTitle.size() >= 2 && data.courseTitle.size() <= 140
+        && isValidId(data.packageId)
+        && data.packageLabel is string && data.packageLabel.size() >= 1 && data.packageLabel.size() <= 100
+        && data.sessionsCount is number && data.sessionsCount >= 1 && data.sessionsCount <= 24
+        && data.mode in ['online', 'offline']
+        && data.slotIds is list && data.slotIds.size() >= 1 && data.slotIds.size() <= data.sessionsCount
+        && data.slotIds[0] is string && data.slotIds[0].size() <= 128
+        && (!('slotSummaries' in data) || (data.slotSummaries is list && data.slotSummaries.size() <= 24))
+        && isValidStudentMap(data.student)
+        && data.amount is number && data.amount >= 0 && data.amount <= 100000
+        && data.paymentMethod in ['vodafone_cash', 'instapay']
+        // Enforce cloud storage HTTPS URLs only — block raw Base64 blobs in Firestore
+        && data.receiptUrl is string && data.receiptUrl.matches('^https://.+') && data.receiptUrl.size() <= 1500
+        && data.status in ['pending_review', 'confirmed', 'rejected', 'cancelled']
+        && data.rejectionReason is string && data.rejectionReason.size() <= 400
+        && isSafeHttpsOrEmpty(data.classLink, 500)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBookingLookup(data) {
+      return data.keys().hasAll([
+          'bookingId', 'code', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
+          'mode', 'slotSummaries', 'studentName', 'amount', 'status',
+          'rejectionReason', 'classLink', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingId', 'code', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
+          'packageType', 'mode', 'slotSummaries', 'studentName', 'amount', 'status',
+          'rejectionReason', 'classLink', 'createdAt'
+        ])
+        && isValidId(data.bookingId)
+        && isValidBookingCode(data.code)
+        && data.courseTitle is string && data.courseTitle.size() >= 2 && data.courseTitle.size() <= 140
+        && isValidId(data.packageId)
+        && data.packageLabel is string && data.packageLabel.size() >= 1 && data.packageLabel.size() <= 100
+        && data.sessionsCount is number && data.sessionsCount >= 1 && data.sessionsCount <= 24
+        && data.mode in ['online', 'offline']
+        && data.slotSummaries is list && data.slotSummaries.size() <= 24
+        && data.studentName is string && data.studentName.size() >= 2 && data.studentName.size() <= 120
+        && data.amount is number && data.amount >= 0 && data.amount <= 100000
+        && data.status in ['pending_review', 'confirmed', 'rejected', 'cancelled']
+        && data.rejectionReason is string && data.rejectionReason.size() <= 400
+        && isSafeHttpsOrEmpty(data.classLink, 500)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['type', 'order', 'isVisible'])
+        && data.keys().hasOnly(['type', 'name', 'role', 'text', 'imageUrl', 'order', 'isVisible'])
+        && data.type in ['quote', 'screenshot']
+        && (!('name' in data) || (data.name is string && data.name.size() <= 100))
+        && (!('role' in data) || (data.role is string && data.role.size() <= 100))
+        && (!('text' in data) || (data.text is string && data.text.size() <= 600))
+        && (!('imageUrl' in data) || isSafeHttpsOrEmpty(data.imageUrl, 1500))
+        && data.order is number && data.order >= 0 && data.order <= 999
+        && data.isVisible is bool;
+    }
+
+    function isValidAdmin(data) {
+      return data.keys().hasAll(['email'])
+        && data.keys().hasOnly(['email'])
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160;
+    }
+
+    // =========================================================================
+    // COLLECTION RULES
+    // =========================================================================
+
+    match /settings/{settingId} {
+      allow get: if settingId == 'main';
+      allow list: if false;
+      allow create, update: if settingId == 'main' && isValidSettings(incoming()) && isAdmin();
+      allow delete: if false;
+    }
+
+    match /courses/{courseId} {
+      allow get: if isValidId(courseId) && (existing().isActive == true || isAdmin());
+      allow list: if resource.data.isActive == true || isAdmin();
+      allow create: if isValidId(courseId) && isValidCourse(incoming()) && isAdmin();
+      allow update: if isValidId(courseId) && isValidCourse(incoming()) && isAdmin();
+      allow delete: if isValidId(courseId) && isAdmin();
+    }
+
+    match /slots/{slotId} {
+      allow get: if isValidId(slotId);
+      // Public queries can list available future slots; admins can list all
+      allow list: if resource.data.status == 'available' || isAdmin();
+      allow create: if isValidId(slotId) && isValidSlot(incoming()) && isAdmin();
+      allow update: if isValidId(slotId) && isValidSlot(incoming()) && (
+        isAdmin() || (
+          existing().status == 'available'
+          && incoming().status == 'pending'
+          && incoming().courseId == existing().courseId
+          && incoming().startAt == existing().startAt
+          && incoming().endAt == existing().endAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'bookingId'])
+          && incoming().bookingId is string
+          && isValidId(incoming().bookingId)
+          && existsAfter(/databases/$(database)/documents/bookings/$(incoming().bookingId))
+        )
+      );
+      allow delete: if isValidId(slotId) && isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isValidId(bookingId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(bookingId)
+        && isValidBooking(incoming())
+        && incoming().status == 'pending_review'
+        && incoming().rejectionReason == ''
+        && incoming().classLink == ''
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/courses/$(incoming().courseId))
+        && get(/databases/$(database)/documents/courses/$(incoming().courseId)).data.isActive == true
+        && existsAfter(/databases/$(database)/documents/bookingLookups/$(incoming().code + '_' + incoming().student.whatsapp));
+      allow update: if isValidId(bookingId)
+        && isValidBooking(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().code == existing().code
+        && isAdmin();
+      allow delete: if isValidId(bookingId) && isAdmin();
+    }
+
+    match /bookingLookups/{lookupId} {
+      allow get: if isValidLookupId(lookupId);
+      allow list: if false;
+      allow create: if isValidLookupId(lookupId)
+        && isValidBookingLookup(incoming())
+        && incoming().status == 'pending_review'
+        && incoming().rejectionReason == ''
+        && incoming().classLink == ''
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/bookings/$(incoming().bookingId));
+      allow update: if isValidLookupId(lookupId)
+        && isValidBookingLookup(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().bookingId == existing().bookingId
+        && isAdmin();
+      allow delete: if isValidLookupId(lookupId) && isAdmin();
+    }
+
+    match /testimonials/{testimonialId} {
+      allow get: if isValidId(testimonialId) && (existing().isVisible == true || isAdmin());
+      allow list: if resource.data.isVisible == true || isAdmin();
+      allow create: if isValidId(testimonialId) && isValidTestimonial(incoming()) && isAdmin();
+      allow update: if isValidId(testimonialId) && isValidTestimonial(incoming()) && isAdmin();
+      allow delete: if isValidId(testimonialId) && isAdmin();
+    }
+
+    // Lead form removed from FAQ — close anonymous spam vector while letting Admin manage legacy leads
+    match /leads/{leadId} {
+      allow get, list, delete: if isAdmin();
+      allow create, update: if false;
+    }
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isValidId(uid) && isValidAdmin(incoming()) && isAdmin();
+      allow delete: if isValidId(uid) && isAdmin();
+    }
+  }
+}

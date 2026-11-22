@@ -1,0 +1,423 @@
+{
+  "entities": {
+    "Settings": {
+      "title": "Settings",
+      "description": "Global site copy, contact details, payment wallets, social links, stats, and FAQ configuration.",
+      "type": "object",
+      "properties": {
+        "whatsapp": {
+          "type": "string",
+          "pattern": "^01[0125][0-9]{8}$",
+          "maxLength": 15,
+          "description": "Egyptian WhatsApp number"
+        },
+        "vodafoneCash": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Vodafone Cash wallet number"
+        },
+        "instaPay": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "InstaPay IPA address or phone number"
+        },
+        "heroTitle": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "heroTitleEn": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "heroSubtitle": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "heroSubtitleEn": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "aboutTitle": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "aboutItems": {
+          "type": "array",
+          "description": "Up to 6 about highlights"
+        },
+        "stats": {
+          "type": "array",
+          "description": "Up to 6 stats items"
+        },
+        "videoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "teacherPhotoUrl": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "socials": {
+          "type": "object"
+        },
+        "faq": {
+          "type": "array",
+          "description": "Up to 20 FAQ items"
+        },
+        "cancellationPolicy": {
+          "type": "string",
+          "maxLength": 600
+        }
+      },
+      "required": ["whatsapp", "heroTitle", "heroSubtitle", "aboutItems", "stats", "faq"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "English grade or specialized course offered by Mr. Adham.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "titleEn": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "tagEn": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 360
+        },
+        "descriptionEn": {
+          "type": "string",
+          "maxLength": 360
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["online", "offline", "both"]
+        },
+        "allowedPackages": {
+          "type": "array"
+        },
+        "prices": {
+          "type": "object"
+        },
+        "sessionDurationMinutes": {
+          "type": "number"
+        },
+        "capacity": {
+          "type": "number"
+        },
+        "illustration": {
+          "type": "string",
+          "enum": ["clock", "books", "chart"]
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "order": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "tag",
+        "description",
+        "mode",
+        "allowedPackages",
+        "prices",
+        "sessionDurationMinutes",
+        "capacity",
+        "isActive",
+        "order"
+      ]
+    },
+    "Slot": {
+      "title": "Slot",
+      "description": "Bookable class time slot with deterministic ID {courseId_YYYYMMDD_HHmm}.",
+      "type": "object",
+      "properties": {
+        "courseId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 64
+        },
+        "startAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["available", "pending", "booked", "closed"]
+        },
+        "bookingId": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": ["courseId", "startAt", "endAt", "status"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Student class reservation containing PII and payment receipt, restricted to admins for reading.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^ADM-[A-Z0-9]{5}$",
+          "maxLength": 12
+        },
+        "courseId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 64
+        },
+        "courseTitle": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "packageType": {
+          "type": "string",
+          "enum": ["single", "pack4", "pack8"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["online", "offline"]
+        },
+        "slotIds": {
+          "type": "array"
+        },
+        "slotSummaries": {
+          "type": "array"
+        },
+        "student": {
+          "type": "object"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["vodafone_cash", "instapay"]
+        },
+        "receiptUrl": {
+          "type": "string",
+          "maxLength": 950000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending_review", "confirmed", "rejected", "cancelled"]
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "classLink": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "code",
+        "courseId",
+        "courseTitle",
+        "packageType",
+        "mode",
+        "slotIds",
+        "student",
+        "amount",
+        "paymentMethod",
+        "receiptUrl",
+        "status",
+        "rejectionReason",
+        "classLink",
+        "createdAt"
+      ]
+    },
+    "BookingLookup": {
+      "title": "BookingLookup",
+      "description": "PII-minimal public status lookup keyed strictly by {code}_{whatsapp} with get-only access.",
+      "type": "object",
+      "properties": {
+        "bookingId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^ADM-[A-Z0-9]{5}$",
+          "maxLength": 12
+        },
+        "courseTitle": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "packageType": {
+          "type": "string",
+          "enum": ["single", "pack4", "pack8"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["online", "offline"]
+        },
+        "slotSummaries": {
+          "type": "array"
+        },
+        "studentName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "amount": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending_review", "confirmed", "rejected", "cancelled"]
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "classLink": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bookingId",
+        "code",
+        "courseTitle",
+        "packageType",
+        "mode",
+        "slotSummaries",
+        "studentName",
+        "amount",
+        "status",
+        "rejectionReason",
+        "classLink",
+        "createdAt"
+      ]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Student/parent review quote or verified screenshot gallery item.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["quote", "screenshot"]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 950000
+        },
+        "order": {
+          "type": "number"
+        },
+        "isVisible": {
+          "type": "boolean"
+        }
+      },
+      "required": ["type", "order", "isVisible"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "WhatsApp callback lead submitted from the FAQ/Contact section.",
+      "type": "object",
+      "properties": {
+        "whatsapp": {
+          "type": "string",
+          "pattern": "^01[0125][0-9]{8}$",
+          "maxLength": 15
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["whatsapp", "createdAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized admin user record keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160
+        }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Site settings document at /settings/main."
+    },
+    "/courses/{courseId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Active and archived English courses/grades."
+    },
+    "/slots/{slotId}": {
+      "schema": { "$ref": "#/entities/Slot" },
+      "description": "Bookable time slots with deterministic IDs {courseId_YYYYMMDD_HHmm}."
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Full booking records including student PII and payment receipt."
+    },
+    "/bookingLookups/{lookupId}": {
+      "schema": { "$ref": "#/entities/BookingLookup" },
+      "description": "Public get-only booking status lookup keyed by {code}_{whatsapp}."
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": { "$ref": "#/entities/Testimonial" },
+      "description": "Student and parent quotes and screenshot proofs."
+    },
+    "/leads/{leadId}": {
+      "schema": { "$ref": "#/entities/Lead" },
+      "description": "Student/parent WhatsApp leads from the contact form."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Authorized administrator UID registry."
+    }
+  }
+}

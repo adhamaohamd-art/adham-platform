@@ -1,0 +1,6 @@
+{
+  "name": "مستر أدهم | منصة حجز حصص اللغة الإنجليزية",
+  "description": "منصة حجز حصص اللغة الإنجليزية مع مستر أدهم لجميع المراحل التعليمية في مصر — حصص أونلاين وأوفلاين بأسلوب مبسط ومنظم من التأسيس حتى الثانوية العامة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
