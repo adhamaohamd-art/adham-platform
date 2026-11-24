@@ -21,6 +21,7 @@
      - `email`: `"بريدك@gmail.com"`
 3. **رفع قواعد الأمان (`firestore.rules` و `storage.rules`)** — أو بالأمر `firebase deploy --only firestore:rules,storage`:
    - انسخ محتوى ملف `firestore.rules` في `Firestore Database > Rules` واضغط **Publish**.
+   - **مهم جداً — الـ Index بتاع المواعيد:** من `Firestore Database > Indexes > Composite > Add index` أنشئ Index على Collection ID = `slots` بالحقول بالترتيب: `courseId` (Ascending) ثم `status` (Ascending) ثم `startAt` (Ascending). أو انشره بالأمر `firebase deploy --only firestore:indexes` (الملف `firestore.indexes.json` جاهز). من غيره بيتحول الموقع لاستعلام بديل بس بيفضل أبطأ.
    - فعّل **Firebase Storage** وانسخ محتوى `storage.rules` في `Storage > Rules` واضغط **Publish**.
 4. **تفعيل Firebase App Check (لمنع البوتات من تجميد المواعيد):**
    - من `Firebase Console > App Check` اربط تطبيق الويب بـ **reCAPTCHA v3**، وضع الـ Site Key في `VITE_RECAPTCHA_SITE_KEY` داخل `.env` (وفي إعدادات Cloudflare Pages).

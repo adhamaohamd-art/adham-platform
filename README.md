@@ -11,10 +11,12 @@
 1. أنشئ مشروعاً جديداً في [Firebase Console](https://console.firebase.google.com).
 2. فعّل **Cloud Firestore** و **Firebase Authentication** (فعّل Google Sign-In و/أو Email/Password من `Authentication -> Sign-in method`).
 3. انسخ إعدادات الـ Web App داخل `firebase-applet-config.json` (أو متغيرات البيئة عند الحاجة).
-4. انشر قواعد الأمان:
+4. انشر قواعد الأمان **والـ Index** (مهم: من غير الـ Index المواعيد مش هتظهر للزوار):
    ```bash
-   firebase deploy --only firestore:rules
+   firebase deploy --only firestore:rules,firestore:indexes
    ```
+   ولو بتنشر من الـ Console مش من الـ CLI: افتح `Firestore Database -> Indexes -> Composite -> Add index`
+   على Collection ID = `slots` وأضف الحقول بالترتيب: `courseId` (Ascending) ثم `status` (Ascending) ثم `startAt` (Ascending).
 
 ## 2. إضافة أول مستخدم أدمن (Admin)
 

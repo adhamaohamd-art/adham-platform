@@ -108,8 +108,26 @@ export function SlotsManagerTab({
     return [...set].sort((a, b) => a - b);
   }, [fromMin, toMin, duration, weekSlots]);
 
+  // The dashboard only loads slots from today onwards, so past weeks would always look empty.
+  const currentWeekStart = useMemo(() => weekStartOf(new Date()), []);
+  const canGoBack = weekStart.getTime() - 7 * DAY_MS >= currentWeekStart.getTime() - DAY_MS;
+
   const moveWeek = (delta: number) =>
-    setWeekStart((prev) => new Date(prev.getTime() + delta * 7 * DAY_MS));
+    setWeekStart((prev) => {
+      const next = new Date(prev.getTime() + delta * 7 * DAY_MS);
+      return next.getTime() < currentWeekStart.getTime() - DAY_MS ? prev : next;
+    });
+
+  // What visitors can actually book right now (same window the booking page uses: next 29 days)
+  const visitorOpenCount = useMemo(() => {
+    const nowMs = Date.now();
+    const maxMs = nowMs + 29 * DAY_MS;
+    return slots.filter((s) => {
+      if (s.courseId !== activeCourseId || s.status !== 'available') return false;
+      const t = toDate(s.startAt).getTime();
+      return t > nowMs && t <= maxMs;
+    }).length;
+  }, [slots, activeCourseId]);
 
   const commit = async (ops: Op[], successMsg: string) => {
     if (ops.length === 0) return;
@@ -285,15 +303,30 @@ export function SlotsManagerTab({
             </select>
           </div>
         </div>
-        <p className="mt-3 text-xs text-[#14202B]/65">
-          اضغط على أي خانة علشان تفتحها أو تقفلها. الخانات المحجوزة بتتدار من تبويب الحجوزات.
+        <div className="mt-3 space-y-1.5 text-xs text-[#14202B]/70">
+          <p className="font-semibold text-[#14202B]">إزاي تضيف مواعيد؟</p>
+          <ol className="list-decimal space-y-0.5 pr-5">
+            <li>اختار الصف، وبعدها حدد "من / إلى / مدة الحصة" (دي بتحدد الخانات اللي هتظهر في الجدول).</li>
+            <li>اضغط على أي خانة فيها (+) علشان تفتح الميعاد، أو زر "فتح / قفل اليوم" لليوم كله.</li>
+            <li>لما الأسبوع يبقى جاهز، اضغط "كرر الأسبوع ده في الأسابيع الجاية" وهيتعمل لك باقي الأسابيع تلقائي.</li>
+          </ol>
+          <p>الخانات المحجوزة أو اللي بتستنى مراجعة الإيصال بتتدار من تبويب الحجوزات.</p>
+        </div>
+        <p
+          className={`mt-3 inline-flex rounded-full px-3 py-1 text-[11px] font-bold ${
+            visitorOpenCount > 0 ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {visitorOpenCount > 0
+            ? `ظاهر للزوار دلوقتي: ${visitorOpenCount} ميعاد متاح خلال الـ 29 يوم الجايين`
+            : 'مفيش أي ميعاد متاح للزوار في الـ 29 يوم الجايين — افتح مواعيد أو كرر الأسبوع.'}
         </p>
       </div>
 
       <div className="rounded-[24px] bg-white p-5 card-shadow">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => moveWeek(-1)} className="rounded-full bg-[#F6ECE1] p-2 hover:bg-[#FEEADD]" aria-label="الأسبوع السابق">
+            <button type="button" onClick={() => moveWeek(-1)} disabled={!canGoBack} className="rounded-full bg-[#F6ECE1] p-2 hover:bg-[#FEEADD] disabled:opacity-40" aria-label="الأسبوع السابق">
               <ChevronRight className="h-4 w-4" />
             </button>
             <p className="min-w-[170px] text-center text-sm font-bold">
@@ -304,7 +337,7 @@ export function SlotsManagerTab({
             </button>
             <button
               type="button"
-              onClick={() => setWeekStart(weekStartOf(new Date()))}
+              onClick={() => setWeekStart(currentWeekStart)}
               className="rounded-full bg-[#F6ECE1] px-3 py-1.5 text-xs font-semibold hover:bg-[#FEEADD]"
             >
               الأسبوع ده

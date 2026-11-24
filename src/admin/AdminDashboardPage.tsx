@@ -132,6 +132,10 @@ export function AdminDashboardPage() {
       ),
       (snap) => {
         setSlots(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Slot, 'id'>) })));
+      },
+      (err) => {
+        console.error('[admin] slots listener failed:', err);
+        showToast('تعذر تحميل المواعيد: ' + (err?.code ?? 'خطأ غير معروف'));
       }
     );
 
@@ -167,6 +171,10 @@ export function AdminDashboardPage() {
         prevPendingRef.current = pendingNow;
         initialLoadedRef.current = true;
         setBookings(list);
+      },
+      (err) => {
+        console.error('[admin] bookings listener failed:', err);
+        showToast('تعذر تحميل الحجوزات: ' + (err?.code ?? 'خطأ غير معروف'));
       }
     );
     return () => unsubBookings();

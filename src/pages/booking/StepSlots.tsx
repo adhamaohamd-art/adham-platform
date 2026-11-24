@@ -17,6 +17,8 @@ interface StepSlotsProps {
   selectedSlots: Slot[];
   requiredSessions: number;
   loadingSlots: boolean;
+  slotsError?: string | null;
+  onRetrySlots?: () => void;
   slotNotice: string | null;
   onSelectDay: (dayKey: string) => void;
   onToggleSlot: (slot: Slot) => void;
@@ -34,6 +36,8 @@ export function StepSlots({
   selectedSlots,
   requiredSessions,
   loadingSlots,
+  slotsError,
+  onRetrySlots,
   slotNotice,
   onSelectDay,
   onToggleSlot,
@@ -81,6 +85,22 @@ export function StepSlots({
       {loadingSlots ? (
         <div className="rounded-2xl bg-white p-8 text-center text-sm text-[#14202B]/70">
           {t('جاري تحميل المواعيد المتاحة لهذا الصف...', 'Loading available slots...')}
+        </div>
+      ) : slotsError ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-800">
+          <p className="font-semibold">
+            {t('مقدرناش نحمّل المواعيد دلوقتي.', "We couldn't load the available slots.")}
+          </p>
+          <p className="mt-1 text-xs opacity-80">{slotsError}</p>
+          {onRetrySlots && (
+            <button
+              type="button"
+              onClick={onRetrySlots}
+              className="mt-3 inline-flex min-h-[40px] items-center rounded-full bg-[#187B97] px-5 text-xs font-bold text-white hover:bg-[#267688]"
+            >
+              {t('حاول تاني', 'Try again')}
+            </button>
+          )}
         </div>
       ) : (
         <>

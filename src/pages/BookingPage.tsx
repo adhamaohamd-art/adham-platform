@@ -56,6 +56,8 @@ export function BookingPage() {
 
   const [courseSlots, setCourseSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [slotsReloadKey, setSlotsReloadKey] = useState(0);
   const [selectedDayKey, setSelectedDayKey] = useState<string>('');
   const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
   const [slotNotice, setSlotNotice] = useState<string | null>(null);
@@ -117,12 +119,19 @@ export function BookingPage() {
 
     let cancelled = false;
     setLoadingSlots(true);
+    setSlotsError(null);
     void fetchAvailableSlotsForCourse(selectedCourse.id)
       .then((list) => {
         if (!cancelled) setCourseSlots(list);
       })
-      .catch(() => {
-        if (!cancelled) setCourseSlots([]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setCourseSlots([]);
+        setSlotsError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'تعذر تحميل المواعيد حالياً. حاول مرة أخرى.'
+        );
       })
       .finally(() => {
         if (!cancelled) setLoadingSlots(false);
@@ -131,7 +140,7 @@ export function BookingPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCourse?.id]);
+  }, [selectedCourse?.id, slotsReloadKey]);
 
   const requiredSessions = selectedPackage?.sessionsCount ?? 1;
 
@@ -351,6 +360,8 @@ export function BookingPage() {
                     selectedSlots={selectedSlots}
                     requiredSessions={requiredSessions}
                     loadingSlots={loadingSlots}
+                    slotsError={slotsError}
+                    onRetrySlots={() => setSlotsReloadKey((k) => k + 1)}
                     slotNotice={slotNotice}
                     onSelectDay={setSelectedDayKey}
                     onToggleSlot={toggleSlot}

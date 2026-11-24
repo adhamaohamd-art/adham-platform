@@ -47,42 +47,55 @@ export class SlotUnavailableError extends Error {
   }
 }
 
+const SLOT_WINDOW_DAYS = 29;
+
+function mapSlotDocs(docs: { id: string; data: () => unknown }[]): Slot[] {
+  return docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Slot, 'id'>) }));
+}
+
 /**
  * Fetches upcoming available slots strictly for a single course with a bounded limit
  * so landing-page visitors never trigger full-collection slot reads.
+ *
+ * IMPORTANT (why visitors used to see no slots while the admin did):
+ * - Firestore rules only let non-admins LIST slots when the query itself guarantees
+ *   `status == 'available'`. Any query without that filter is rejected for visitors
+ *   (and silently allowed for the admin).
+ * - The primary query below needs a composite index (courseId + status + startAt),
+ *   declared in `firestore.indexes.json`. If the index was not deployed yet, we fall back
+ *   to an equality-only query (no composite index needed) that STILL filters on
+ *   `status == 'available'`, and we apply the date window on the client.
  */
 export async function fetchAvailableSlotsForCourse(courseId: string): Promise<Slot[]> {
+  const nowMs = Date.now();
+  const maxMs = nowMs + SLOT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
   try {
-    const nowTs = Timestamp.now();
-    const maxTs = Timestamp.fromDate(new Date(Date.now() + 29 * 24 * 60 * 60 * 1000));
     const q = query(
       collection(db, 'slots'),
       where('courseId', '==', courseId),
       where('status', '==', 'available'),
-      where('startAt', '>=', nowTs),
-      where('startAt', '<=', maxTs),
+      where('startAt', '>=', Timestamp.fromMillis(nowMs)),
+      where('startAt', '<=', Timestamp.fromMillis(maxMs)),
       orderBy('startAt', 'asc'),
       limit(120)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({
-      id: d.id,
-      ...(d.data() as Omit<Slot, 'id'>),
-    }));
-  } catch {
+    return mapSlotDocs(snap.docs);
+  } catch (primaryErr) {
+    if (import.meta.env.DEV) {
+      console.warn('[slots] primary query failed, using fallback (is the index deployed?)', primaryErr);
+    }
     try {
-      const qSimple = query(
+      const qFallback = query(
         collection(db, 'slots'),
         where('courseId', '==', courseId),
-        limit(160)
+        where('status', '==', 'available'),
+        limit(500)
       );
-      const snap = await getDocs(qSimple);
-      const nowMs = Date.now();
-      const maxMs = nowMs + 29 * 24 * 60 * 60 * 1000;
-      return snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() as Omit<Slot, 'id'>) }))
+      const snap = await getDocs(qFallback);
+      return mapSlotDocs(snap.docs)
         .filter((s) => {
-          if (s.status !== 'available') return false;
           const tMs = toDate(s.startAt).getTime();
           return tMs >= nowMs && tMs <= maxMs;
         })
