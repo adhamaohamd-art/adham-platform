@@ -29,7 +29,6 @@ export function Navbar() {
     { label: t('الصفوف', 'COURSES'), to: '/courses' },
     { label: t('الفيديوهات', 'VIDEOS'), to: '/videos' },
     { label: t('قناة المدرس', 'CHANNEL'), to: '/channel' },
-    { label: t('الأسئلة الشائعة', 'FAQ'), to: '/#faq' },
     { label: t('تتبع حجزك', 'TRACK'), to: '/track' },
   ];
 
@@ -37,13 +36,13 @@ export function Navbar() {
   const accountLabel = user
     ? isAdmin
       ? t('لوحة التحكم', 'Dashboard')
-      : t('حسابي', 'My Account')
-    : t('تسجيل الدخول', 'Sign In');
+      : t('حسابي', 'Account')
+    : t('دخول', 'Sign In');
 
   const linkLabelClass =
     lang === 'en'
-      ? 'font-condensed uppercase tracking-[0.12em] text-[14px]'
-      : 'text-[14px] font-medium tracking-wide';
+      ? 'font-condensed uppercase tracking-[0.1em] text-[13px]'
+      : 'text-[13px] font-medium tracking-wide';
 
   return (
     <>
@@ -54,39 +53,30 @@ export function Navbar() {
             : 'bg-transparent'
         }`}
       >
-        <div className="mx-auto flex h-18 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+        <div className="mx-auto flex h-18 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
           {/* Brand Logo */}
           <Link
             to="/"
-            className="flex shrink-0 items-center gap-2.5 whitespace-nowrap text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-lg"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-lg"
           >
-            <BrandLogoMark className="h-8 w-8 shrink-0 text-white" />
-            <span className="font-display text-lg font-semibold tracking-tight sm:text-xl">
+            <BrandLogoMark className="h-7 w-7 shrink-0 text-white" />
+            <span className="font-display text-base font-semibold tracking-tight sm:text-lg">
               {t('مستر أدهم', 'Mr. Adham')}
             </span>
           </Link>
 
-          {/* Center Links */}
+          {/* Center Links (compact & balanced — zero overflow on 1024px+ screens) */}
           <nav
             aria-label={t('التنقل الرئيسي', 'Main navigation')}
-            className="hidden items-center gap-5 lg:flex"
+            className="hidden items-center gap-4 xl:gap-6 lg:flex"
           >
             {navLinks.map((item) => {
-              const isHash = item.to.includes('#');
-              const isActive = !isHash && location.pathname === item.to;
-              return isHash ? (
-                <a
-                  key={item.to}
-                  href={item.to}
-                  className={`${linkLabelClass} whitespace-nowrap shrink-0 text-white/90 transition-colors hover:text-white hover:underline underline-offset-8 decoration-[#EFB9A0] decoration-2`}
-                >
-                  {item.label}
-                </a>
-              ) : (
+              const isActive = location.pathname === item.to;
+              return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`${linkLabelClass} inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors hover:text-white hover:underline underline-offset-8 decoration-[#EFB9A0] decoration-2 ${
+                  className={`${linkLabelClass} inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors hover:text-white hover:underline underline-offset-8 decoration-[#EFB9A0] decoration-2 ${
                     isActive ? 'text-white underline' : 'text-white/90'
                   }`}
                 >
@@ -97,20 +87,20 @@ export function Navbar() {
             })}
           </nav>
 
-          {/* Right Controls: Unified Auth + Lang + Book CTA */}
-          <div className="flex shrink-0 items-center gap-2.5">
+          {/* Right Controls */}
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={toggleLang}
               aria-label={t('التبديل للغة الإنجليزية', 'Switch to Arabic')}
-              className="hidden h-9 items-center justify-center rounded-full border border-white/35 px-3 text-xs font-semibold text-white transition hover:bg-white/15 lg:inline-flex"
+              className="hidden h-9 items-center justify-center rounded-full border border-white/35 px-2.5 text-xs font-semibold text-white transition hover:bg-white/15 lg:inline-flex"
             >
               {lang === 'ar' ? 'EN' : 'عربي'}
             </button>
 
             <Link
               to={accountHref}
-              className="hidden h-10 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/40 bg-white/12 px-4 text-xs font-bold text-white transition hover:bg-white/22 lg:inline-flex"
+              className="hidden h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/40 bg-white/12 px-3.5 text-xs font-bold text-white transition hover:bg-white/22 lg:inline-flex"
             >
               {user ? <UserIcon className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
               <span>{accountLabel}</span>
@@ -118,13 +108,13 @@ export function Navbar() {
 
             <Link
               to="/booking"
-              className={`hidden whitespace-nowrap shrink-0 rounded-full bg-white px-5 py-2.5 text-[#14202B] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FEEADD] hover:shadow-md lg:inline-flex items-center justify-center ${
+              className={`hidden whitespace-nowrap shrink-0 rounded-full bg-white px-4 py-2 text-[#14202B] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FEEADD] hover:shadow-md lg:inline-flex items-center justify-center ${
                 lang === 'en'
-                  ? 'font-condensed uppercase tracking-[0.1em] text-[14px] font-semibold'
-                  : 'text-[13px] font-bold tracking-wide'
+                  ? 'font-condensed uppercase tracking-[0.08em] text-[13px] font-semibold'
+                  : 'text-xs font-bold tracking-wide'
               }`}
             >
-              {t('احجز حصتك', 'BOOK SESSION')}
+              {t('احجز حصتك', 'BOOK NOW')}
             </Link>
 
             <button
@@ -132,9 +122,9 @@ export function Navbar() {
               onClick={() => setDrawerOpen(true)}
               aria-label={t('فتح القائمة', 'Open menu')}
               aria-expanded={drawerOpen}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25 lg:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25 lg:hidden"
             >
-              <Menu className="h-6 w-6" />
+              <Menu className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -179,30 +169,16 @@ export function Navbar() {
                 </div>
 
                 <nav className="mt-6 flex flex-col gap-2">
-                  {navLinks.map((item) => {
-                    const isHash = item.to.includes('#');
-                    const className =
-                      'flex min-h-[44px] items-center rounded-xl px-4 py-2.5 text-base font-medium text-[#14202B] transition hover:bg-white';
-                    return isHash ? (
-                      <a
-                        key={item.to}
-                        href={item.to}
-                        onClick={() => setDrawerOpen(false)}
-                        className={className}
-                      >
-                        {item.label}
-                      </a>
-                    ) : (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        onClick={() => setDrawerOpen(false)}
-                        className={className}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
+                  {navLinks.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setDrawerOpen(false)}
+                      className="flex min-h-[44px] items-center rounded-xl px-4 py-2.5 text-base font-medium text-[#14202B] transition hover:bg-white"
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
                 </nav>
               </div>
 
