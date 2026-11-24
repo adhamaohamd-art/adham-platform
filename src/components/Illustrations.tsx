@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Layers, MessageSquareCheck } from 'lucide-react';
+import { Award, Layers, MessageSquareText } from 'lucide-react';
 import type { CourseIllustrationType } from '../types/models';
 
 export function BrandLogoMark({ className = 'w-8 h-8' }: { className?: string }) {
@@ -70,7 +70,7 @@ export function ContactPhoneIllustration({ alt = 'تواصل معنا' }: { alt?
       role="img"
       aria-label={alt}
     >
-      <MessageSquareCheck className="h-16 w-16 text-[#FEEADD]" />
+      <MessageSquareText className="h-16 w-16 text-[#FEEADD]" />
     </div>
   );
 }
@@ -105,7 +105,7 @@ export function AboutFeatureIcon({
 }: {
   icon: 'experience' | 'method' | 'followup';
 }) {
-  const Icon = icon === 'experience' ? Award : icon === 'method' ? Layers : MessageSquareCheck;
+  const Icon = icon === 'experience' ? Award : icon === 'method' ? Layers : MessageSquareText;
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#187B97] card-shadow">
       <Icon className="h-6 w-6" />
