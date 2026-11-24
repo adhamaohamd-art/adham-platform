@@ -12,6 +12,8 @@ export function TestimonialsSection({ testimonials }: { testimonials: Testimonia
   const quotes = testimonials.filter((item) => item.type === 'quote');
   const screenshots = testimonials.filter((item) => item.type === 'screenshot' && item.imageUrl);
 
+  if (quotes.length === 0 && screenshots.length === 0) return null;
+
   useEffect(() => {
     if (lightboxIdx === null) return;
     const onKey = (e: KeyboardEvent) => {
@@ -34,7 +36,7 @@ export function TestimonialsSection({ testimonials }: { testimonials: Testimonia
   return (
     <section
       id="testimonials"
-      className="relative z-20 -mt-10 rounded-t-[40px] bg-[#F6ECE1] px-6 pt-20 pb-24 text-[#14202B] sm:px-10"
+      className="scroll-mt-20 relative z-20 -mt-10 rounded-t-[40px] bg-[#F6ECE1] px-6 pt-20 pb-24 text-[#14202B] sm:px-10"
     >
       <div className="mx-auto max-w-6xl">
         <Reveal>

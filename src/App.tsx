@@ -18,8 +18,14 @@ const BookingPage = lazy(() =>
 const TrackBookingPage = lazy(() =>
   import('./pages/TrackBookingPage').then((m) => ({ default: m.TrackBookingPage }))
 );
-const AdminLoginPage = lazy(() =>
-  import('./admin/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage }))
+const AuthPage = lazy(() =>
+  import('./pages/AuthPage').then((m) => ({ default: m.AuthPage }))
+);
+const StudentDashboardPage = lazy(() =>
+  import('./pages/StudentDashboardPage').then((m) => ({ default: m.StudentDashboardPage }))
+);
+const BroadcastChannelPage = lazy(() =>
+  import('./pages/BroadcastChannelPage').then((m) => ({ default: m.BroadcastChannelPage }))
 );
 const AdminDashboardPage = lazy(() =>
   import('./admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage }))
@@ -69,7 +75,10 @@ export default function App() {
                     <Route path="/courses" element={<CoursesPage />} />
                     <Route path="/booking" element={<BookingPage />} />
                     <Route path="/track" element={<TrackBookingPage />} />
-                    <Route path="/admin/login" element={<AdminLoginPage />} />
+                    <Route path="/channel" element={<BroadcastChannelPage />} />
+                    <Route path="/login" element={<AuthPage />} />
+                    <Route path="/dashboard" element={<StudentDashboardPage />} />
+                    <Route path="/admin/login" element={<Navigate to="/login" replace />} />
                     <Route path="/admin" element={<AdminDashboardPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

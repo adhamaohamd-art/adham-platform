@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { LogIn, Megaphone, Menu, User as UserIcon, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { BrandLogoMark } from './Illustrations';
 import { useLanguage } from '../hooks/useLanguage';
+import { useAdminAuth } from '../hooks/useAdminAuth';
 
 export function Navbar() {
   const { lang, toggleLang, t } = useLanguage();
+  const { user, isAdmin } = useAdminAuth();
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -25,10 +27,17 @@ export function Navbar() {
   const navLinks = [
     { label: t('الرئيسية', 'HOME'), to: '/' },
     { label: t('الصفوف', 'COURSES'), to: '/courses' },
-    { label: t('آراء الطلاب', 'REVIEWS'), to: '/#testimonials' },
+    { label: t('قناة المدرس', 'CHANNEL'), to: '/channel' },
     { label: t('الأسئلة الشائعة', 'FAQ'), to: '/#faq' },
     { label: t('تتبع حجزك', 'TRACK'), to: '/track' },
   ];
+
+  const accountHref = user ? (isAdmin ? '/admin' : '/dashboard') : '/login';
+  const accountLabel = user
+    ? isAdmin
+      ? t('لوحة التحكم', 'Dashboard')
+      : t('حسابي', 'My Account')
+    : t('تسجيل الدخول', 'Sign In');
 
   const linkLabelClass =
     lang === 'en'
@@ -44,8 +53,8 @@ export function Navbar() {
             : 'bg-transparent'
         }`}
       >
-        <div className="mx-auto flex h-18 max-w-6xl items-center justify-between gap-6 px-5 sm:px-8">
-          {/* Zone 1: Brand Logo + Wordmark */}
+        <div className="mx-auto flex h-18 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+          {/* Brand Logo */}
           <Link
             to="/"
             className="flex shrink-0 items-center gap-2.5 whitespace-nowrap text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-lg"
@@ -56,10 +65,10 @@ export function Navbar() {
             </span>
           </Link>
 
-          {/* Zone 2: Center Links */}
+          {/* Center Links */}
           <nav
             aria-label={t('التنقل الرئيسي', 'Main navigation')}
-            className="hidden items-center gap-6 lg:flex"
+            className="hidden items-center gap-5 lg:flex"
           >
             {navLinks.map((item) => {
               const isHash = item.to.includes('#');
@@ -76,30 +85,39 @@ export function Navbar() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`${linkLabelClass} whitespace-nowrap shrink-0 transition-colors hover:text-white hover:underline underline-offset-8 decoration-[#EFB9A0] decoration-2 ${
+                  className={`${linkLabelClass} inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors hover:text-white hover:underline underline-offset-8 decoration-[#EFB9A0] decoration-2 ${
                     isActive ? 'text-white underline' : 'text-white/90'
                   }`}
                 >
-                  {item.label}
+                  {item.to === '/channel' && <Megaphone className="h-3.5 w-3.5 text-[#FEEADD]" />}
+                  <span>{item.label}</span>
                 </Link>
               );
             })}
           </nav>
 
-          {/* Zone 3: Primary CTA + Mobile trigger */}
-          <div className="flex shrink-0 items-center gap-3">
+          {/* Right Controls: Unified Auth + Lang + Book CTA */}
+          <div className="flex shrink-0 items-center gap-2.5">
             <button
               type="button"
               onClick={toggleLang}
               aria-label={t('التبديل للغة الإنجليزية', 'Switch to Arabic')}
-              className="hidden h-9 items-center justify-center rounded-full border border-white/35 px-3 text-xs font-semibold text-white transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white lg:inline-flex"
+              className="hidden h-9 items-center justify-center rounded-full border border-white/35 px-3 text-xs font-semibold text-white transition hover:bg-white/15 lg:inline-flex"
             >
               {lang === 'ar' ? 'EN' : 'عربي'}
             </button>
 
             <Link
+              to={accountHref}
+              className="hidden h-10 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/40 bg-white/12 px-4 text-xs font-bold text-white transition hover:bg-white/22 lg:inline-flex"
+            >
+              {user ? <UserIcon className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
+              <span>{accountLabel}</span>
+            </Link>
+
+            <Link
               to="/booking"
-              className={`hidden whitespace-nowrap shrink-0 rounded-full bg-white px-6 py-2.5 text-[#14202B] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FEEADD] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white lg:inline-flex items-center justify-center ${
+              className={`hidden whitespace-nowrap shrink-0 rounded-full bg-white px-5 py-2.5 text-[#14202B] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FEEADD] hover:shadow-md lg:inline-flex items-center justify-center ${
                 lang === 'en'
                   ? 'font-condensed uppercase tracking-[0.1em] text-[14px] font-semibold'
                   : 'text-[13px] font-bold tracking-wide'
@@ -188,6 +206,14 @@ export function Navbar() {
               </div>
 
               <div className="space-y-3 border-t border-[#14202B]/10 pt-5">
+                <Link
+                  to={accountHref}
+                  onClick={() => setDrawerOpen(false)}
+                  className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-full bg-[#187B97] px-5 py-2.5 text-sm font-bold text-white shadow-sm"
+                >
+                  {user ? <UserIcon className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                  <span>{accountLabel}</span>
+                </Link>
                 <button
                   type="button"
                   onClick={toggleLang}

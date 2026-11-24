@@ -288,7 +288,7 @@ export function BookingPage() {
                 )}
               </p>
               <Link
-                to="/admin/login"
+                to="/login"
                 className="mt-5 inline-flex min-h-[44px] items-center rounded-full bg-[#187B97] px-6 py-2 text-sm font-bold text-white"
               >
                 {t('دخول لوحة الإدارة', 'Open Admin Portal')}

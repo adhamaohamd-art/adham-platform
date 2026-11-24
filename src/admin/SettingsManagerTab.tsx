@@ -83,6 +83,20 @@ export function SettingsManagerTab({
         </div>
       </div>
 
+      {/* Global Announcement Banner for Students */}
+      <div className="rounded-[24px] bg-white p-5 card-shadow space-y-3 sm:p-6">
+        <h2 className="font-display text-xl font-semibold text-[#14202B]">
+          شريط الإشعارات والعروض العام (يظهر للطلاب في لوحتهم)
+        </h2>
+        <input
+          type="text"
+          value={form.announcementBanner ?? ''}
+          onChange={(e) => setForm({ ...form, announcementBanner: e.target.value })}
+          placeholder="مثال: خصم 15% على باقة 8 حصص حتى نهاية الأسبوع!"
+          className="min-h-[44px] w-full rounded-xl border border-[#14202B]/15 bg-[#F6ECE1]/50 px-3 text-sm"
+        />
+      </div>
+
       {/* Hero, Video & Teacher Photo */}
       <div className="rounded-[24px] bg-white p-5 card-shadow space-y-4 sm:p-6">
         <h2 className="font-display text-xl font-semibold text-[#14202B]">

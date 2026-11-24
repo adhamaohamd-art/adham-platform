@@ -12,7 +12,9 @@ import {
   LogOut,
   MessageCircle,
   MessageSquareQuote,
+  Megaphone,
   Settings,
+  Users,
   X,
 } from 'lucide-react';
 import { BrandLogoMark } from '../components/Illustrations';
@@ -38,6 +40,8 @@ import { CoursesManagerTab } from './CoursesManagerTab';
 import { TestimonialsManagerTab } from './TestimonialsManagerTab';
 import { SettingsManagerTab } from './SettingsManagerTab';
 import { BookingsAndReceiptsTab } from './BookingsAndReceiptsTab';
+import { StudentsManagerTab } from './StudentsManagerTab';
+import { BroadcastManagerTab } from './BroadcastManagerTab';
 import type { Booking, Course, SiteSettings, Slot, Testimonial } from '../types/models';
 
 type AdminTab =
@@ -46,6 +50,8 @@ type AdminTab =
   | 'bookings'
   | 'slots'
   | 'courses'
+  | 'students'
+  | 'channel'
   | 'testimonials'
   | 'settings';
 
@@ -250,7 +256,7 @@ export function AdminDashboardPage() {
   }
 
   if (!user || !isAdmin) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   const navItems: { id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }[] = [
@@ -259,6 +265,8 @@ export function AdminDashboardPage() {
     { id: 'bookings', label: 'كل الحجوزات', icon: CalendarCheck2 },
     { id: 'slots', label: 'المواعيد', icon: Calendar },
     { id: 'courses', label: 'الصفوف والباقات', icon: BookOpen },
+    { id: 'students', label: 'الطلاب والحصص', icon: Users },
+    { id: 'channel', label: 'قناة المدرس', icon: Megaphone },
     { id: 'testimonials', label: 'آراء الطلاب', icon: MessageSquareQuote },
     { id: 'settings', label: 'الإعدادات', icon: Settings },
   ];
@@ -450,6 +458,8 @@ export function AdminDashboardPage() {
 
         {activeTab === 'slots' && <SlotsManagerTab courses={courses} slots={slots} bookings={bookings} onToast={showToast} />}
         {activeTab === 'courses' && <CoursesManagerTab courses={courses} onToast={showToast} />}
+        {activeTab === 'students' && <StudentsManagerTab onToast={showToast} />}
+        {activeTab === 'channel' && <BroadcastManagerTab onToast={showToast} />}
         {activeTab === 'testimonials' && (
           <TestimonialsManagerTab testimonials={testimonials} onToast={showToast} />
         )}

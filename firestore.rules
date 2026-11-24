@@ -16,12 +16,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Server-side bootstrap so the owner can never be locked out on first login
+    // (Not present in frontend JS bundle)
+    function isBootstrappedAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'adhamaohamd@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.admin == true
-        || request.auth.token.role == 'admin'
-        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return isBootstrappedAdmin()
+        || (isSignedIn() && (
+          request.auth.token.admin == true
+          || request.auth.token.role == 'admin'
+          || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        ));
     }
 
     function incoming() {
@@ -71,7 +80,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'whatsapp', 'vodafoneCash', 'instaPay', 'heroTitle', 'heroTitleEn',
           'heroSubtitle', 'heroSubtitleEn', 'aboutTitle', 'aboutTitleEn',
-          'aboutItems', 'stats', 'videoUrl', 'teacherPhotoUrl',
+          'aboutItems', 'stats', 'videoUrl', 'teacherPhotoUrl', 'announcementBanner',
           'socials', 'faq', 'cancellationPolicy', 'cancellationPolicyEn'
         ])
         && isEgyptianPhone(data.whatsapp)
@@ -87,6 +96,7 @@ service cloud.firestore {
         && data.stats is list && data.stats.size() <= 6
         && (!('videoUrl' in data) || isSafeHttpsOrEmpty(data.videoUrl, 500))
         && (!('teacherPhotoUrl' in data) || isSafeHttpsOrEmpty(data.teacherPhotoUrl, 1500))
+        && (!('announcementBanner' in data) || (data.announcementBanner is string && data.announcementBanner.size() <= 300))
         && (!('socials' in data) || data.socials is map)
         && data.faq is list && data.faq.size() <= 20
         && (!('cancellationPolicy' in data) || (data.cancellationPolicy is string && data.cancellationPolicy.size() <= 600))
@@ -212,6 +222,15 @@ service cloud.firestore {
         && data.isVisible is bool;
     }
 
+    function isValidBroadcast(data) {
+      return data.keys().hasAll(['title', 'category', 'body', 'createdAt'])
+        && data.keys().hasOnly(['title', 'category', 'body', 'createdAt'])
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 140
+        && data.category in ['grammar', 'vocab', 'announcement']
+        && data.body is string && data.body.size() >= 2 && data.body.size() <= 2000
+        && data.createdAt is timestamp;
+    }
+
     function isValidAdmin(data) {
       return data.keys().hasAll(['email'])
         && data.keys().hasOnly(['email'])
@@ -301,6 +320,31 @@ service cloud.firestore {
       allow create: if isValidId(testimonialId) && isValidTestimonial(incoming()) && isAdmin();
       allow update: if isValidId(testimonialId) && isValidTestimonial(incoming()) && isAdmin();
       allow delete: if isValidId(testimonialId) && isAdmin();
+    }
+
+    // Student personal profiles: students can create/read their own profile and edit only basic contact fields;
+    // ONLY Admin can update package, remainingSessions, attendanceLog, and classLink.
+    match /students/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && incoming().totalSessions == 0
+        && incoming().remainingSessions == 0
+        && incoming().attendanceLog is list && incoming().attendanceLog.size() == 0;
+      allow update: if isAdmin() || (
+        isSignedIn()
+        && request.auth.uid == uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'whatsapp', 'grade'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Teacher Broadcast Channel: public read-only, strictly admin write/delete
+    match /broadcasts/{postId} {
+      allow get, list: if true;
+      allow create: if isAdmin() && isValidBroadcast(incoming());
+      allow update, delete: if isAdmin();
     }
 
     match /leads/{leadId} {

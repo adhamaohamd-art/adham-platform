@@ -40,7 +40,7 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Quick Links */}
+          {/* Quick Links (Admin link removed cleanly) */}
           <div className="space-y-3">
             <h3 className="font-display text-sm font-semibold tracking-wide text-[#FEEADD]">
               {t('روابط سريعة', 'Quick Links')}
@@ -67,8 +67,13 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/admin/login" className="transition hover:text-[#FEEADD]">
-                  {t('دخول الإدارة', 'Admin Portal')}
+                <Link to="/channel" className="transition hover:text-[#FEEADD]">
+                  {t('قناة المدرس', 'Teacher Channel')}
+                </Link>
+              </li>
+              <li>
+                <Link to="/login" className="transition hover:text-[#FEEADD]">
+                  {t('تسجيل الدخول', 'Sign In')}
                 </Link>
               </li>
             </ul>

@@ -1,21 +1,31 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
+  createUserWithEmailAndPassword,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
+  updateProfile,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
+
+export interface AuthResult {
+  ok: boolean;
+  isAdmin: boolean;
+}
 
 interface AdminAuthContextValue {
   user: User | null;
   isAdmin: boolean;
   loading: boolean;
   authError: string | null;
-  loginWithEmail: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
+  loginWithEmail: (email: string, password: string) => Promise<AuthResult>;
+  registerWithEmail: (name: string, email: string, password: string) => Promise<AuthResult>;
+  loginWithGoogle: () => Promise<AuthResult>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -23,24 +33,96 @@ interface AdminAuthContextValue {
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
 /**
- * Verifies admin privileges strictly via Firebase Custom Claims or the
- * Firestore `admins/{uid}` allowlist — never via a hardcoded frontend email.
+ * Checks admin privileges without hardcoding any personal email in frontend JS:
+ * 1) Firebase Custom Claims
+ * 2) Firestore `admins/{uid}` document
+ * 3) First-time server-enforced bootstrap: tries creating `admins/{uid}` which
+ *    Firestore Rules ONLY permit for the verified project owner.
  */
-async function checkIsAdminUser(user: User): Promise<boolean> {
+async function resolveIsAdmin(user: User): Promise<boolean> {
   try {
     const tokenResult = await user.getIdTokenResult();
     if (tokenResult.claims.admin === true || tokenResult.claims.role === 'admin') {
       return true;
     }
   } catch {
-    // Fall through to Firestore admins collection check
+    // Ignore and check Firestore
   }
 
   try {
-    const adminSnap = await getDoc(doc(db, 'admins', user.uid));
-    return adminSnap.exists();
+    const adminRef = doc(db, 'admins', user.uid);
+    const snap = await getDoc(adminRef);
+    if (snap.exists()) return true;
+
+    // Attempt server-verified bootstrap (silently denied for non-owner users)
+    if (user.email) {
+      try {
+        await setDoc(adminRef, { email: user.email });
+        return true;
+      } catch {
+        return false;
+      }
+    }
   } catch {
     return false;
+  }
+
+  return false;
+}
+
+/** Ensures a signed-in student has a personal profile document in `students/{uid}` */
+async function ensureStudentProfile(user: User, fallbackName?: string): Promise<void> {
+  try {
+    const ref = doc(db, 'students', user.uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        uid: user.uid,
+        name: (fallbackName || user.displayName || user.email?.split('@')[0] || 'طالب').trim(),
+        email: user.email ?? '',
+        whatsapp: '',
+        grade: '',
+        activePackage: '',
+        totalSessions: 0,
+        remainingSessions: 0,
+        nextSessionNote: '',
+        classLink: '',
+        attendanceLog: [],
+        createdAt: serverTimestamp(),
+      });
+    }
+  } catch {
+    // Non-fatal if rules not yet published
+  }
+}
+
+function mapFirebaseAuthError(err: unknown): string {
+  const code = (err as { code?: string })?.code ?? '';
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return `الدومين (${host}) غير مضاف في Firebase Console. ادخل Firebase > Authentication > Settings > Authorized domains وأضف "${host}" ثم حاول مرة أخرى.`;
+    case 'auth/operation-not-allowed':
+      return 'طريقة تسجيل الدخول دي غير مفعّلة في Firebase Console > Authentication > Sign-in method.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+    case 'auth/email-already-in-use':
+      return 'البريد الإلكتروني ده مسجّل بالفعل — جرّب تسجيل الدخول بدلاً من إنشاء حساب.';
+    case 'auth/weak-password':
+      return 'كلمة المرور ضعيفة — اكتب 6 حروف أو أرقام على الأقل.';
+    case 'auth/too-many-requests':
+      return 'تم حظر المحاولات مؤقتاً لكثرة الإدخال الخاطئ. حاول بعد دقائق.';
+    case 'auth/network-request-failed':
+      return 'تعذر الاتصال بالإنترنت، تأكد من الشبكة وحاول مجدداً.';
+    case 'auth/popup-blocked':
+      return 'المتصفح منع نافذة Google المنبثقة — جاري تحويلك لصفحة الدخول...';
+    default:
+      return code
+        ? `تعذر تسجيل الدخول حالياً (${code}). تأكد من إعدادات Firebase وحاول مجدداً.`
+        : 'تعذر تسجيل الدخول حالياً، حاول مرة أخرى.';
   }
 }
 
@@ -51,14 +133,23 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Complete any pending Google redirect login gracefully
+    void getRedirectResult(auth).catch((err) => {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code && code !== 'auth/popup-closed-by-user') {
+        setAuthError(mapFirebaseAuthError(err));
+      }
+    });
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        const authorized = await checkIsAdminUser(firebaseUser);
-        setIsAdmin(authorized);
-        setAuthError(
-          authorized ? null : 'هذا الحساب غير مصرح له بالدخول إلى لوحة الإدارة.'
-        );
+        const adminStatus = await resolveIsAdmin(firebaseUser);
+        setIsAdmin(adminStatus);
+        if (!adminStatus) {
+          await ensureStudentProfile(firebaseUser);
+        }
+        setAuthError(null);
       } else {
         setIsAdmin(false);
       }
@@ -67,57 +158,72 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, []);
 
-  const loginWithEmail = async (email: string, password: string): Promise<boolean> => {
+  const loginWithEmail = async (email: string, password: string): Promise<AuthResult> => {
     setAuthError(null);
     try {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const authorized = await checkIsAdminUser(cred.user);
-      setIsAdmin(authorized);
-      if (!authorized) {
-        await signOut(auth);
-        setAuthError('هذا الحساب غير مضاف في قائمة المسؤولين.');
-        return false;
+      const adminStatus = await resolveIsAdmin(cred.user);
+      setIsAdmin(adminStatus);
+      if (!adminStatus) {
+        await ensureStudentProfile(cred.user);
       }
-      return true;
+      return { ok: true, isAdmin: adminStatus };
     } catch (err) {
-      const code = (err as { code?: string })?.code ?? '';
-      if (code === 'auth/operation-not-allowed') {
-        setAuthError(
-          'تسجيل الدخول بالبريد وكلمة المرور غير مفعل بعد في Firebase Console — استخدم الدخول بحساب Google أو فعّل Email/Password.'
-        );
-      } else if (
-        code === 'auth/invalid-credential' ||
-        code === 'auth/wrong-password' ||
-        code === 'auth/user-not-found'
-      ) {
-        setAuthError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
-      } else if (code === 'auth/too-many-requests') {
-        setAuthError('تم حظر المحاولات مؤقتاً لكثرة الإدخال الخاطئ. حاول بعد دقائق.');
-      } else {
-        setAuthError('تعذر تسجيل الدخول حالياً، تأكد من الاتصال وحاول مجدداً.');
-      }
-      return false;
+      setAuthError(mapFirebaseAuthError(err));
+      return { ok: false, isAdmin: false };
     }
   };
 
-  const loginWithGoogle = async (): Promise<boolean> => {
+  const registerWithEmail = async (
+    name: string,
+    email: string,
+    password: string
+  ): Promise<AuthResult> => {
+    setAuthError(null);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      if (name.trim()) {
+        await updateProfile(cred.user, { displayName: name.trim() }).catch(() => undefined);
+      }
+      const adminStatus = await resolveIsAdmin(cred.user);
+      setIsAdmin(adminStatus);
+      if (!adminStatus) {
+        await ensureStudentProfile(cred.user, name.trim());
+      }
+      return { ok: true, isAdmin: adminStatus };
+    } catch (err) {
+      setAuthError(mapFirebaseAuthError(err));
+      return { ok: false, isAdmin: false };
+    }
+  };
+
+  const loginWithGoogle = async (): Promise<AuthResult> => {
     setAuthError(null);
     try {
       const cred = await signInWithPopup(auth, googleProvider);
-      const authorized = await checkIsAdminUser(cred.user);
-      setIsAdmin(authorized);
-      if (!authorized) {
-        await signOut(auth);
-        setAuthError('حساب Google ده غير مصرح له بدخول لوحة الإدارة.');
-        return false;
+      const adminStatus = await resolveIsAdmin(cred.user);
+      setIsAdmin(adminStatus);
+      if (!adminStatus) {
+        await ensureStudentProfile(cred.user);
       }
-      return true;
+      return { ok: true, isAdmin: adminStatus };
     } catch (err) {
       const code = (err as { code?: string })?.code ?? '';
-      if (code !== 'auth/popup-closed-by-user') {
-        setAuthError('تعذر تسجيل الدخول بحساب Google.');
+      if (code === 'auth/popup-closed-by-user') {
+        return { ok: false, isAdmin: false };
       }
-      return false;
+      // Automatic fallback to full-page redirect if popup was blocked by browser
+      if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return { ok: false, isAdmin: false };
+        } catch (redirectErr) {
+          setAuthError(mapFirebaseAuthError(redirectErr));
+          return { ok: false, isAdmin: false };
+        }
+      }
+      setAuthError(mapFirebaseAuthError(err));
+      return { ok: false, isAdmin: false };
     }
   };
 
@@ -138,6 +244,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         authError,
         loginWithEmail,
+        registerWithEmail,
         loginWithGoogle,
         logout,
         clearError,

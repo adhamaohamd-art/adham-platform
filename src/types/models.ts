@@ -23,6 +23,35 @@ export interface PaymentProof {
   transactionRef: string;
 }
 
+export interface AttendanceEntry {
+  id: string;
+  dateIso: string;
+  note: string;
+}
+
+export interface StudentProfile {
+  uid: string;
+  name: string;
+  email: string;
+  whatsapp?: string;
+  grade?: string;
+  activePackage?: string;
+  totalSessions: number;
+  remainingSessions: number;
+  nextSessionNote?: string;
+  classLink?: string;
+  attendanceLog: AttendanceEntry[];
+  createdAt?: Timestamp | Date;
+}
+
+export interface BroadcastPost {
+  id: string;
+  title: string;
+  category: 'grammar' | 'vocab' | 'announcement';
+  body: string;
+  createdAt: Timestamp | Date;
+}
+
 export interface AboutItem {
   id: string;
   icon: 'experience' | 'method' | 'followup';
@@ -69,13 +98,13 @@ export interface SiteSettings {
   stats: StatItem[];
   videoUrl: string;
   teacherPhotoUrl: string;
+  announcementBanner?: string;
   socials: SocialLinks;
   faq: FaqItem[];
   cancellationPolicy: string;
   cancellationPolicyEn: string;
 }
 
-/** Legacy shape kept optional solely for reading pre-migration Firestore documents */
 export interface LegacyCoursePrices {
   single?: number;
   pack4?: number;
@@ -92,9 +121,7 @@ export interface Course {
   descriptionEn?: string;
   mode: CourseMode;
   packages: CoursePackage[];
-  /** @deprecated Kept optional for backward compatibility with older Firestore docs */
   allowedPackages?: string[];
-  /** @deprecated Kept optional for backward compatibility with older Firestore docs */
   prices?: LegacyCoursePrices;
   sessionDurationMinutes: number;
   capacity: number;
@@ -134,7 +161,6 @@ export interface Booking {
   packageId: string;
   packageLabel: string;
   sessionsCount: number;
-  /** @deprecated Optional fallback for pre-migration bookings */
   packageType?: string;
   mode: BookingMode;
   slotIds: string[];
@@ -158,7 +184,6 @@ export interface BookingLookup {
   packageId: string;
   packageLabel: string;
   sessionsCount: number;
-  /** @deprecated Optional fallback for pre-migration lookups */
   packageType?: string;
   mode: BookingMode;
   slotSummaries: SlotSummary[];
