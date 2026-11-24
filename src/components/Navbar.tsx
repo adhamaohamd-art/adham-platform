@@ -27,6 +27,7 @@ export function Navbar() {
   const navLinks = [
     { label: t('الرئيسية', 'HOME'), to: '/' },
     { label: t('الصفوف', 'COURSES'), to: '/courses' },
+    { label: t('الفيديوهات', 'VIDEOS'), to: '/videos' },
     { label: t('قناة المدرس', 'CHANNEL'), to: '/channel' },
     { label: t('الأسئلة الشائعة', 'FAQ'), to: '/#faq' },
     { label: t('تتبع حجزك', 'TRACK'), to: '/track' },

@@ -67,7 +67,7 @@ export function HomePage() {
                     {t('احجز حصتك الآن', 'BOOK YOUR SESSION NOW')}
                   </Link>
 
-                  {hasVideo && (
+                  {hasVideo ? (
                     <button
                       type="button"
                       onClick={() => setVideoOpen(true)}
@@ -78,6 +78,16 @@ export function HomePage() {
                       </span>
                       <span>{t('شاهد فيديو تعريفي', 'Watch Intro Video')}</span>
                     </button>
+                  ) : (
+                    <Link
+                      to="/videos"
+                      className="inline-flex min-h-[50px] items-center gap-2.5 rounded-full border border-white/35 bg-white/12 px-6 py-3 text-sm font-semibold text-white backdrop-blur-xs transition hover:-translate-y-0.5 hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#EFB9A0] text-[#14202B]">
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                      </span>
+                      <span>{t('شاهد الحصص التجريبية', 'Watch Demo Classes')}</span>
+                    </Link>
                   )}
                 </div>
               </Reveal>

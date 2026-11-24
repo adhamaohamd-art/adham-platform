@@ -222,6 +222,19 @@ service cloud.firestore {
         && data.isVisible is bool;
     }
 
+    function isValidVideo(data) {
+      return data.keys().hasAll(['title', 'type', 'url', 'order', 'isVisible'])
+        && data.keys().hasOnly(['title', 'titleEn', 'type', 'url', 'duration', 'gradeTag', 'order', 'isVisible'])
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 140
+        && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 140))
+        && data.type in ['demo', 'reel']
+        && data.url is string && data.url.matches('^https://.+') && data.url.size() <= 500
+        && (!('duration' in data) || (data.duration is string && data.duration.size() <= 20))
+        && (!('gradeTag' in data) || (data.gradeTag is string && data.gradeTag.size() <= 40))
+        && data.order is number && data.order >= 0 && data.order <= 999
+        && data.isVisible is bool;
+    }
+
     function isValidBroadcast(data) {
       return data.keys().hasAll(['title', 'category', 'body', 'createdAt'])
         && data.keys().hasOnly(['title', 'category', 'body', 'createdAt'])
@@ -338,6 +351,14 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'whatsapp', 'grade'])
       );
       allow delete: if isAdmin();
+    }
+
+    // Demo & Reels Video Library: public read for visible videos, admin write
+    match /videos/{videoId} {
+      allow get: if isValidId(videoId) && (existing().isVisible == true || isAdmin());
+      allow list: if resource.data.isVisible == true || isAdmin();
+      allow create, update: if isValidId(videoId) && isValidVideo(incoming()) && isAdmin();
+      allow delete: if isValidId(videoId) && isAdmin();
     }
 
     // Teacher Broadcast Channel: public read-only, strictly admin write/delete

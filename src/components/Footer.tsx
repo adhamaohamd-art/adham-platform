@@ -67,6 +67,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link to="/videos" className="transition hover:text-[#FEEADD]">
+                  {t('مكتبة الفيديوهات', 'Demo & Reels')}
+                </Link>
+              </li>
+              <li>
                 <Link to="/channel" className="transition hover:text-[#FEEADD]">
                   {t('قناة المدرس', 'Teacher Channel')}
                 </Link>

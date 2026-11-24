@@ -27,6 +27,9 @@ const StudentDashboardPage = lazy(() =>
 const BroadcastChannelPage = lazy(() =>
   import('./pages/BroadcastChannelPage').then((m) => ({ default: m.BroadcastChannelPage }))
 );
+const VideosLibraryPage = lazy(() =>
+  import('./pages/VideosLibraryPage').then((m) => ({ default: m.VideosLibraryPage }))
+);
 const AdminDashboardPage = lazy(() =>
   import('./admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage }))
 );
@@ -76,6 +79,7 @@ export default function App() {
                     <Route path="/booking" element={<BookingPage />} />
                     <Route path="/track" element={<TrackBookingPage />} />
                     <Route path="/channel" element={<BroadcastChannelPage />} />
+                    <Route path="/videos" element={<VideosLibraryPage />} />
                     <Route path="/login" element={<AuthPage />} />
                     <Route path="/dashboard" element={<StudentDashboardPage />} />
                     <Route path="/admin/login" element={<Navigate to="/login" replace />} />

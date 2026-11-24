@@ -216,3 +216,15 @@ export interface AdminRecord {
   uid: string;
   email: string;
 }
+
+export interface VideoLesson {
+  id: string;
+  title: string;
+  titleEn?: string;
+  type: 'demo' | 'reel';
+  url: string;
+  duration?: string;
+  gradeTag?: string;
+  order: number;
+  isVisible: boolean;
+}

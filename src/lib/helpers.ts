@@ -461,3 +461,12 @@ export function getModeLabel(mode: 'online' | 'offline' | 'both', lang: Language
   if (mode === 'offline') return 'أوفلاين (سنتر / برايفت)';
   return 'أونلاين وأوفلاين';
 }
+
+export function extractYouTubeThumbnail(url: string): string | null {
+  const trimmed = (url || '').trim();
+  const ytMatch = trimmed.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
+  );
+  if (!ytMatch) return null;
+  return `https://i.ytimg.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+}

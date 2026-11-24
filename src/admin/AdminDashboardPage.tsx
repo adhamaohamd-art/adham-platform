@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   CalendarCheck2,
+  Clapperboard,
   Database,
   ExternalLink,
   FileCheck2,
@@ -42,6 +43,7 @@ import { SettingsManagerTab } from './SettingsManagerTab';
 import { BookingsAndReceiptsTab } from './BookingsAndReceiptsTab';
 import { StudentsManagerTab } from './StudentsManagerTab';
 import { BroadcastManagerTab } from './BroadcastManagerTab';
+import { VideosManagerTab } from './VideosManagerTab';
 import type { Booking, Course, SiteSettings, Slot, Testimonial } from '../types/models';
 
 type AdminTab =
@@ -52,6 +54,7 @@ type AdminTab =
   | 'courses'
   | 'students'
   | 'channel'
+  | 'videos'
   | 'testimonials'
   | 'settings';
 
@@ -267,6 +270,7 @@ export function AdminDashboardPage() {
     { id: 'courses', label: 'الصفوف والباقات', icon: BookOpen },
     { id: 'students', label: 'الطلاب والحصص', icon: Users },
     { id: 'channel', label: 'قناة المدرس', icon: Megaphone },
+    { id: 'videos', label: 'مكتبة الفيديوهات', icon: Clapperboard },
     { id: 'testimonials', label: 'آراء الطلاب', icon: MessageSquareQuote },
     { id: 'settings', label: 'الإعدادات', icon: Settings },
   ];
@@ -460,6 +464,7 @@ export function AdminDashboardPage() {
         {activeTab === 'courses' && <CoursesManagerTab courses={courses} onToast={showToast} />}
         {activeTab === 'students' && <StudentsManagerTab onToast={showToast} />}
         {activeTab === 'channel' && <BroadcastManagerTab onToast={showToast} />}
+        {activeTab === 'videos' && <VideosManagerTab onToast={showToast} />}
         {activeTab === 'testimonials' && (
           <TestimonialsManagerTab testimonials={testimonials} onToast={showToast} />
         )}
