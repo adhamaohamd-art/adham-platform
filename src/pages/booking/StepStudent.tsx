@@ -1,7 +1,7 @@
 import React from 'react';
 import type { FieldErrors, UseFormRegister } from 'react-hook-form';
 import { useLanguage } from '../../hooks/useLanguage';
-import { GRADE_OPTIONS_AR, GRADE_OPTIONS_EN } from '../../data/seed';
+import type { GradeOption } from '../../types/models';
 
 export interface StudentFormValues {
   name: string;
@@ -14,13 +14,15 @@ export interface StudentFormValues {
 interface StepStudentProps {
   register: UseFormRegister<StudentFormValues>;
   errors: FieldErrors<StudentFormValues>;
+  /** Grade choices allowed for the selected course: 0 = hide, 1 = fixed, 2+ = dropdown */
+  gradeOptions: GradeOption[];
   onBack: () => void;
   onSubmitStep: () => void;
 }
 
-export function StepStudent({ register, errors, onBack, onSubmitStep }: StepStudentProps) {
+export function StepStudent({ register, errors, gradeOptions, onBack, onSubmitStep }: StepStudentProps) {
   const { lang, t } = useLanguage();
-  const gradeOptions = lang === 'en' ? GRADE_OPTIONS_EN : GRADE_OPTIONS_AR;
+  const labelOf = (o: GradeOption) => (lang === 'en' && o.labelEn ? o.labelEn : o.label);
 
   return (
     <div className="space-y-5">
@@ -39,21 +41,32 @@ export function StepStudent({ register, errors, onBack, onSubmitStep }: StepStud
           {errors.name && <p className="mt-1 text-xs text-red-700">{errors.name.message}</p>}
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-semibold">{t('الصف الدراسي *', 'School Grade *')}</label>
-          <select
-            {...register('grade')}
-            className="min-h-[46px] w-full rounded-xl border border-[#14202B]/15 bg-white px-4 text-sm"
-          >
-            <option value="">{t('اختار الصف...', 'Select grade...')}</option>
-            {gradeOptions.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-          {errors.grade && <p className="mt-1 text-xs text-red-700">{errors.grade.message}</p>}
-        </div>
+        {gradeOptions.length === 1 && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold">{t('الصف الدراسي', 'School Grade')}</label>
+            <div className="flex min-h-[46px] w-full items-center rounded-xl border border-[#187B97]/30 bg-[#187B97]/5 px-4 text-sm font-semibold text-[#14202B]">
+              {labelOf(gradeOptions[0])}
+            </div>
+          </div>
+        )}
+
+        {gradeOptions.length > 1 && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold">{t('الصف الدراسي *', 'School Grade *')}</label>
+            <select
+              {...register('grade')}
+              className="min-h-[46px] w-full rounded-xl border border-[#14202B]/15 bg-white px-4 text-sm"
+            >
+              <option value="">{t('اختار الصف...', 'Select grade...')}</option>
+              {gradeOptions.map((g) => (
+                <option key={g.id} value={g.label}>
+                  {labelOf(g)}
+                </option>
+              ))}
+            </select>
+            {errors.grade && <p className="mt-1 text-xs text-red-700">{errors.grade.message}</p>}
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-xs font-semibold">{t('رقم الواتساب (مصري 11 رقم) *', 'WhatsApp Number (11 digits) *')}</label>

@@ -18,6 +18,13 @@ export interface CoursePackage {
   isActive?: boolean;
 }
 
+/** A school-grade choice offered to the student inside the booking form for a specific course */
+export interface GradeOption {
+  id: string;
+  label: string;
+  labelEn?: string;
+}
+
 export interface PaymentProof {
   senderAccount: string;
   transactionRef: string;
@@ -123,6 +130,14 @@ export interface Course {
   packages: CoursePackage[];
   allowedPackages?: string[];
   prices?: LegacyCoursePrices;
+  /**
+   * School grades the student can pick in the booking form for this course.
+   * - undefined → inferred from the course tag (legacy courses)
+   * - []        → grade question is hidden (grade is saved as the course title)
+   * - 1 item    → auto-selected and shown read-only
+   * - 2+ items  → dropdown with only these choices
+   */
+  gradeOptions?: GradeOption[];
   sessionDurationMinutes: number;
   capacity: number;
   illustration?: CourseIllustrationType;

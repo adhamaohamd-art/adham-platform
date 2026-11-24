@@ -3,12 +3,20 @@ import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Edit3, Plus, Trash2 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { getCoursePackages } from '../lib/helpers';
+import {
+  ALL_STANDARD_GRADES,
+  getCourseGradeOptions,
+  PREP_GRADES,
+  PRIMARY_GRADES,
+  SECONDARY_GRADES,
+} from '../data/grades';
 import { clearSiteDataCache } from '../hooks/useSiteData';
 import type {
   Course,
   CourseIllustrationType,
   CourseMode,
   CoursePackage,
+  GradeOption,
 } from '../types/models';
 
 const DEFAULT_PACKAGES: CoursePackage[] = [
@@ -26,6 +34,7 @@ const EMPTY_COURSE: Omit<Course, 'id'> = {
   descriptionEn: '',
   mode: 'both',
   packages: DEFAULT_PACKAGES,
+  gradeOptions: PREP_GRADES,
   sessionDurationMinutes: 60,
   capacity: 1,
   illustration: 'books',
@@ -50,6 +59,7 @@ export function CoursesManagerTab({
     setForm({
       ...EMPTY_COURSE,
       packages: DEFAULT_PACKAGES.map((p) => ({ ...p })),
+      gradeOptions: PREP_GRADES.map((g) => ({ ...g })),
       order: courses.length + 1,
     });
     setShowForm(true);
@@ -67,6 +77,7 @@ export function CoursesManagerTab({
       descriptionEn: course.descriptionEn ?? '',
       mode: course.mode,
       packages: normalizedPackages.length > 0 ? normalizedPackages.map((p) => ({ ...p })) : DEFAULT_PACKAGES.map((p) => ({ ...p })),
+      gradeOptions: getCourseGradeOptions(course).map((g) => ({ ...g })),
       sessionDurationMinutes: course.sessionDurationMinutes,
       capacity: course.capacity,
       illustration: course.illustration ?? 'books',
@@ -116,6 +127,47 @@ export function CoursesManagerTab({
     }));
   };
 
+  const [customGrade, setCustomGrade] = useState('');
+  const currentGrades: GradeOption[] = form.gradeOptions ?? [];
+  const hasGrade = (label: string) => currentGrades.some((g) => g.label === label);
+
+  const toggleStandardGrade = (g: GradeOption) => {
+    setForm((prev) => {
+      const list = prev.gradeOptions ?? [];
+      const exists = list.some((x) => x.label === g.label);
+      return { ...prev, gradeOptions: exists ? list.filter((x) => x.label !== g.label) : [...list, { ...g }] };
+    });
+  };
+
+  const setGradePreset = (list: GradeOption[]) => {
+    setForm((prev) => ({ ...prev, gradeOptions: list.map((g) => ({ ...g })) }));
+  };
+
+  const addCustomGrade = () => {
+    const label = customGrade.trim();
+    if (!label) return;
+    if (hasGrade(label)) {
+      onToast('الاختيار ده موجود بالفعل.');
+      return;
+    }
+    if (currentGrades.length >= 14) {
+      onToast('الحد الأقصى 14 اختيار.');
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      gradeOptions: [
+        ...(prev.gradeOptions ?? []),
+        { id: `g_${Date.now().toString(36)}`, label, labelEn: label },
+      ],
+    }));
+    setCustomGrade('');
+  };
+
+  const removeGrade = (label: string) => {
+    setForm((prev) => ({ ...prev, gradeOptions: (prev.gradeOptions ?? []).filter((g) => g.label !== label) }));
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) return;
@@ -148,6 +200,11 @@ export function CoursesManagerTab({
         descriptionEn: (form.descriptionEn ?? '').trim(),
         mode: form.mode,
         packages: cleanedPackages,
+        gradeOptions: (form.gradeOptions ?? []).slice(0, 14).map((g, i) => ({
+          id: (g.id || `g_${i + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_'),
+          label: g.label.trim().slice(0, 80),
+          labelEn: (g.labelEn ?? g.label).trim().slice(0, 80),
+        })),
         sessionDurationMinutes: Math.max(15, Math.min(240, Number(form.sessionDurationMinutes) || 60)),
         capacity: Math.max(1, Math.min(100, Number(form.capacity) || 1)),
         illustration: form.illustration ?? 'books',
@@ -368,6 +425,93 @@ export function CoursesManagerTab({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Grade choices shown to the student in booking step 3 */}
+          <div className="space-y-3 rounded-2xl border border-[#14202B]/12 bg-white p-4">
+            <div>
+              <h4 className="font-display text-sm font-semibold text-[#14202B]">
+                اختيارات الصف الدراسي في فورم الحجز
+              </h4>
+              <p className="text-[11px] text-[#14202B]/65">
+                اختار الصفوف اللي الطالب يقدر يختار منها لما يحجز الكورس ده. لو اخترت صف واحد بس بيتحدد تلقائياً
+                ومش بيسأل الطالب، ولو مختارتش ولا صف السؤال بيختفي خالص.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setGradePreset(PRIMARY_GRADES)} className="rounded-full bg-[#F6ECE1] px-3 py-1 text-[11px] font-semibold hover:bg-[#FEEADD]">ابتدائي كله</button>
+              <button type="button" onClick={() => setGradePreset(PREP_GRADES)} className="rounded-full bg-[#F6ECE1] px-3 py-1 text-[11px] font-semibold hover:bg-[#FEEADD]">إعدادي كله</button>
+              <button type="button" onClick={() => setGradePreset(SECONDARY_GRADES)} className="rounded-full bg-[#F6ECE1] px-3 py-1 text-[11px] font-semibold hover:bg-[#FEEADD]">ثانوي كله</button>
+              <button type="button" onClick={() => setGradePreset(ALL_STANDARD_GRADES)} className="rounded-full bg-[#F6ECE1] px-3 py-1 text-[11px] font-semibold hover:bg-[#FEEADD]">كل الصفوف</button>
+              <button type="button" onClick={() => setGradePreset([])} className="rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100">مسح الكل (إخفاء السؤال)</button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {ALL_STANDARD_GRADES.map((g) => {
+                const on = hasGrade(g.label);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => toggleStandardGrade(g)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      on
+                        ? 'border-[#187B97] bg-[#187B97] text-white'
+                        : 'border-[#14202B]/15 bg-white text-[#14202B]/70 hover:border-[#187B97]/50'
+                    }`}
+                  >
+                    {on ? '✓ ' : ''}
+                    {g.label}
+                  </button>
+                );
+              })}
+              {currentGrades
+                .filter((g) => !ALL_STANDARD_GRADES.some((s) => s.label === g.label))
+                .map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => removeGrade(g.label)}
+                    title="اضغط للحذف"
+                    className="rounded-full border border-[#187B97] bg-[#187B97] px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    ✓ {g.label} ✕
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customGrade}
+                onChange={(e) => setCustomGrade(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomGrade();
+                  }
+                }}
+                placeholder="اختيار مخصص (مثال: طلاب الأزهر)"
+                className="min-h-[38px] flex-1 rounded-lg border border-[#14202B]/15 bg-white px-2.5 text-xs"
+              />
+              <button
+                type="button"
+                onClick={addCustomGrade}
+                className="inline-flex min-h-[38px] items-center gap-1 rounded-full bg-[#187B97] px-4 text-xs font-semibold text-white hover:bg-[#267688]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>إضافة</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] font-semibold text-[#267688]">
+              {currentGrades.length === 0
+                ? 'الطالب مش هيشوف سؤال الصف خالص.'
+                : currentGrades.length === 1
+                  ? `هيتسجل تلقائياً: ${currentGrades[0].label}`
+                  : `الطالب هيختار من ${currentGrades.length} اختيارات.`}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

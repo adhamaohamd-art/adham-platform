@@ -1,5 +1,6 @@
 import type { Course, SiteSettings, Slot, Testimonial } from '../types/models';
 import { generateWeeklySlotsRange } from '../lib/helpers';
+import { ALL_STANDARD_GRADES, PREP_GRADES, PRIMARY_GRADES, SECONDARY_GRADES } from './grades';
 
 export const DEFAULT_SETTINGS: SiteSettings = {
   whatsapp: '01063379433',
@@ -114,6 +115,7 @@ export const SEED_COURSES: Course[] = [
     ],
     sessionDurationMinutes: 60,
     capacity: 1,
+    gradeOptions: PRIMARY_GRADES,
     illustration: 'books',
     isActive: true,
     order: 1,
@@ -134,6 +136,7 @@ export const SEED_COURSES: Course[] = [
     ],
     sessionDurationMinutes: 60,
     capacity: 1,
+    gradeOptions: PREP_GRADES,
     illustration: 'clock',
     isActive: true,
     order: 2,
@@ -154,6 +157,7 @@ export const SEED_COURSES: Course[] = [
     ],
     sessionDurationMinutes: 90,
     capacity: 1,
+    gradeOptions: SECONDARY_GRADES,
     illustration: 'chart',
     isActive: true,
     order: 3,
@@ -173,6 +177,7 @@ export const SEED_COURSES: Course[] = [
     ],
     sessionDurationMinutes: 60,
     capacity: 1,
+    gradeOptions: ALL_STANDARD_GRADES,
     illustration: 'books',
     isActive: true,
     order: 4,
@@ -193,6 +198,7 @@ export const SEED_COURSES: Course[] = [
     ],
     sessionDurationMinutes: 60,
     capacity: 1,
+    gradeOptions: ALL_STANDARD_GRADES,
     illustration: 'clock',
     isActive: true,
     order: 5,
@@ -229,31 +235,8 @@ export const SEED_TESTIMONIALS: Testimonial[] = [
   },
 ];
 
-export const GRADE_OPTIONS_AR = [
-  'الصف الرابع الابتدائي',
-  'الصف الخامس الابتدائي',
-  'الصف السادس الابتدائي',
-  'الصف الأول الإعدادي',
-  'الصف الثاني الإعدادي',
-  'الصف الثالث الإعدادي',
-  'الصف الأول الثانوي',
-  'الصف الثاني الثانوي',
-  'الصف الثالث الثانوي',
-  'تأسيس / محادثة (مفتوح)',
-];
-
-export const GRADE_OPTIONS_EN = [
-  'Grade 4 (Primary)',
-  'Grade 5 (Primary)',
-  'Grade 6 (Primary)',
-  'Prep 1',
-  'Prep 2',
-  'Prep 3',
-  'Secondary 1',
-  'Secondary 2',
-  'Thanawya Amma (Secondary 3)',
-  'Foundation / Speaking',
-];
+export const GRADE_OPTIONS_AR = ALL_STANDARD_GRADES.map((x) => x.label);
+export const GRADE_OPTIONS_EN = ALL_STANDARD_GRADES.map((x) => x.labelEn ?? x.label);
 
 export function buildFallbackDemoSlots(courses: Course[]): Slot[] {
   const slots: Slot[] = [];

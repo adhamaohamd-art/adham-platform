@@ -24,6 +24,7 @@ import {
   submitBookingTransaction,
   type CreatedBookingResult,
 } from '../lib/bookingService';
+import { getCourseGradeOptions } from '../data/grades';
 import { StepCourse } from './booking/StepCourse';
 import { StepSlots } from './booking/StepSlots';
 import { StepStudent, type StudentFormValues } from './booking/StepStudent';
@@ -75,6 +76,7 @@ export function BookingPage() {
     register,
     handleSubmit,
     getValues,
+    setValue,
     formState: { errors },
   } = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
@@ -141,6 +143,24 @@ export function BookingPage() {
       cancelled = true;
     };
   }, [selectedCourse?.id, slotsReloadKey]);
+
+  const gradeOptions = useMemo(
+    () => (selectedCourse ? getCourseGradeOptions(selectedCourse) : []),
+    [selectedCourse]
+  );
+
+  // Keep the stored grade consistent with what the selected course allows
+  useEffect(() => {
+    if (!selectedCourse) return;
+    const current = getValues('grade');
+    if (gradeOptions.length === 0) {
+      setValue('grade', selectedCourse.title);
+    } else if (gradeOptions.length === 1) {
+      setValue('grade', gradeOptions[0].label);
+    } else if (!gradeOptions.some((g) => g.label === current)) {
+      setValue('grade', '');
+    }
+  }, [selectedCourse, gradeOptions, getValues, setValue]);
 
   const requiredSessions = selectedPackage?.sessionsCount ?? 1;
 
@@ -376,6 +396,7 @@ export function BookingPage() {
                   <StepStudent
                     register={register}
                     errors={errors}
+                    gradeOptions={gradeOptions}
                     onBack={() => setStep(2)}
                     onSubmitStep={() => void handleSubmit(() => setStep(4))()}
                   />

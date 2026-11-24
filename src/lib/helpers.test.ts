@@ -167,3 +167,15 @@ test('Video embed parser strictly allowlists YouTube, Google Drive, and HTTPS MP
   assert.equal(extractVideoEmbed('javascript:alert(1)'), null);
   assert.equal(extractVideoEmbed(''), null);
 });
+
+import { getCourseGradeOptions } from '../data/grades';
+
+test('getCourseGradeOptions respects explicit list, empty list, and infers by tag for legacy courses', () => {
+  const base = { id: 'x', title: 't', tag: 'ثانوي', description: '', mode: 'both', packages: [], sessionDurationMinutes: 60, capacity: 1, isActive: true, order: 1 } as unknown as Course;
+  assert.equal(getCourseGradeOptions(base).length, 3);
+  assert.ok(getCourseGradeOptions(base).every((g) => g.label.includes('الثانوي')));
+  assert.equal(getCourseGradeOptions({ ...base, gradeOptions: [] }).length, 0);
+  const one = [{ id: 'sec1', label: 'الصف الأول الثانوي' }];
+  assert.deepEqual(getCourseGradeOptions({ ...base, gradeOptions: one }), one);
+  assert.ok(getCourseGradeOptions({ ...base, tag: 'محادثة', tagEn: 'SPEAKING', id: 'conv' }).length > 3);
+});

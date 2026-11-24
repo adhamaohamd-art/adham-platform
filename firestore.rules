@@ -111,7 +111,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'title', 'titleEn', 'tag', 'tagEn', 'description', 'descriptionEn',
           'mode', 'packages', 'allowedPackages', 'prices', 'sessionDurationMinutes',
-          'capacity', 'illustration', 'isActive', 'order'
+          'capacity', 'illustration', 'isActive', 'order', 'gradeOptions'
         ])
         && data.title is string && data.title.size() >= 2 && data.title.size() <= 140
         && (!('titleEn' in data) || (data.titleEn is string && data.titleEn.size() <= 140))
@@ -124,6 +124,7 @@ service cloud.firestore {
         && data.sessionDurationMinutes is number && data.sessionDurationMinutes >= 15 && data.sessionDurationMinutes <= 240
         && data.capacity is number && data.capacity >= 1 && data.capacity <= 100
         && (!('illustration' in data) || data.illustration in ['clock', 'books', 'chart'])
+        && (!('gradeOptions' in data) || (data.gradeOptions is list && data.gradeOptions.size() <= 14))
         && data.isActive is bool
         && data.order is number && data.order >= 0 && data.order <= 999;
     }
