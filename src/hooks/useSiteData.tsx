@@ -1,11 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { DEFAULT_SETTINGS } from '../data/seed';
 import type { Course, SiteSettings, Testimonial } from '../types/models';
 
 const CACHE_KEY = 'mr_adham_site_data_cache_v2';
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL_MS = 60 * 60 * 1000; // cache is only used for an instant first paint
+const REVALIDATE_MIN_GAP_MS = 20 * 1000; // avoid spamming reads when switching tabs
 
 interface CachedSitePayload {
   ts: number;
@@ -56,8 +57,8 @@ export function clearSiteDataCache() {
 
 /**
  * High-scalability SiteDataProvider:
- * - Uses one-shot `getDoc`/`getDocs` with 15-min sessionStorage caching instead of
- *   permanent real-time `onSnapshot` listeners on every landing page visitor.
+ * - Uses one-shot `getDoc`/`getDocs` (stale-while-revalidate) instead of permanent
+ *   real-time listeners. The cached copy only paints instantly; fresh data always follows.
  * - Completely decouples `slots` so slots are ONLY fetched on `/booking` for the
  *   chosen course, reducing Firestore read costs by >95% during traffic spikes.
  * - Removes silent demo `localStorage` fallback so production never hides missing DB data.
@@ -73,19 +74,12 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
   );
   const [loading, setLoading] = useState(!initialCache);
 
-  const fetchAll = useCallback(async (bypassCache = false) => {
-    if (!bypassCache) {
-      const cached = readCache();
-      if (cached) {
-        setSettings(cached.settings);
-        setCourses(cached.courses);
-        setTestimonials(cached.testimonials);
-        setLoading(false);
-        return;
-      }
-    }
+  const lastFetchRef = useRef(0);
 
-    setLoading(true);
+  // Stale-while-revalidate: the cached copy paints instantly, but every page load
+  // (including a plain refresh) always re-reads Firestore so admin edits show up.
+  const fetchAll = useCallback(async () => {
+    lastFetchRef.current = Date.now();
     try {
       const [settingsSnap, coursesSnap, testimonialsSnap] = await Promise.all([
         getDoc(doc(db, 'settings', 'main')),
@@ -123,12 +117,27 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void fetchAll(false);
+    void fetchAll();
+  }, [fetchAll]);
+
+  // Re-check when the person comes back to the tab (e.g. after editing in /admin).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastFetchRef.current < REVALIDATE_MIN_GAP_MS) return;
+      void fetchAll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [fetchAll]);
 
   const refreshSiteData = useCallback(async () => {
     clearSiteDataCache();
-    await fetchAll(true);
+    await fetchAll();
   }, [fetchAll]);
 
   const isLiveFirestoreSeeded = courses.length > 0;

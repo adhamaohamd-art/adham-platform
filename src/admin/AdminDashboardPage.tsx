@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { collection, doc, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import {
   BookOpen,
   Calendar,
@@ -60,6 +60,19 @@ type AdminTab =
 
 const BOOKINGS_PAGE_SIZE = 25;
 
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+const NAV_GROUPS: { title: string; ids: AdminTab[] }[] = [
+  { title: 'يومي', ids: ['today', 'receipts', 'bookings'] },
+  { title: 'الجدول', ids: ['slots', 'students'] },
+  { title: 'المحتوى', ids: ['courses', 'channel', 'videos', 'testimonials'] },
+  { title: 'النظام', ids: ['settings'] },
+];
+
 export function AdminDashboardPage() {
   const { user, isAdmin, loading, logout } = useAdminAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('today');
@@ -111,7 +124,12 @@ export function AdminDashboardPage() {
     });
 
     const unsubSlots = onSnapshot(
-      query(collection(db, 'slots'), orderBy('startAt', 'desc'), limit(250)),
+      query(
+        collection(db, 'slots'),
+        where('startAt', '>=', Timestamp.fromDate(startOfToday())),
+        orderBy('startAt', 'asc'),
+        limit(1200)
+      ),
       (snap) => {
         setSlots(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Slot, 'id'>) })));
       }
@@ -318,31 +336,45 @@ export function AdminDashboardPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-8">
-        {/* Tabs Navigation */}
-        <nav className="mb-6 flex gap-2 overflow-x-auto pb-2">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveTab(item.id)}
-              className={`inline-flex min-h-[42px] shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition ${
-                activeTab === item.id
-                  ? 'bg-[#187B97] text-white shadow-xs'
-                  : 'bg-white text-[#14202B]/80 hover:bg-[#FEEADD]'
-              }`}
-            >
-              <item.icon className="h-4 w-4" />
-              <span>{item.label}</span>
-              {item.badge != null && item.badge > 0 && (
-                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-[#14202B]">
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          ))}
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-8 lg:flex-row lg:items-start">
+        {/* Tabs Navigation: sidebar on desktop, scroller on mobile */}
+        <nav className="lg:sticky lg:top-24 lg:w-60 lg:shrink-0">
+          <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:gap-5 lg:overflow-visible lg:rounded-[24px] lg:bg-white lg:p-4 lg:card-shadow">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.title} className="flex shrink-0 gap-2 lg:flex-col lg:gap-1">
+                <p className="hidden px-3 pb-1 text-[11px] font-bold text-[#14202B]/45 lg:block">
+                  {group.title}
+                </p>
+                {group.ids.map((id) => {
+                  const item = navItems.find((n) => n.id === id)!;
+                  const active = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveTab(item.id)}
+                      className={`inline-flex min-h-[42px] shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition lg:w-full lg:rounded-xl lg:text-sm ${
+                        active
+                          ? 'bg-[#187B97] text-white shadow-xs'
+                          : 'bg-white text-[#14202B]/80 hover:bg-[#FEEADD] lg:bg-transparent'
+                      }`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                      {item.badge != null && item.badge > 0 && (
+                        <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-[#14202B] lg:mr-auto">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </nav>
 
+        <main className="min-w-0 flex-1">
         {toast && (
           <div className="mb-4 rounded-2xl bg-[#14202B] px-5 py-3 text-xs font-semibold text-white shadow-md">
             {toast}
@@ -469,6 +501,7 @@ export function AdminDashboardPage() {
           <TestimonialsManagerTab testimonials={testimonials} onToast={showToast} />
         )}
         {activeTab === 'settings' && <SettingsManagerTab settings={settings} onToast={showToast} />}
+        </main>
       </div>
 
       {/* Receipt Zoom Modal */}
