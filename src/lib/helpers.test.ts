@@ -179,3 +179,18 @@ test('getCourseGradeOptions respects explicit list, empty list, and infers by ta
   assert.deepEqual(getCourseGradeOptions({ ...base, gradeOptions: one }), one);
   assert.ok(getCourseGradeOptions({ ...base, tag: 'محادثة', tagEn: 'SPEAKING', id: 'conv' }).length > 3);
 });
+
+import { ACTIVATION_CODE_REGEX, buildActivationWhatsAppMessage, generateActivationCode, normalizeActivationCode } from './helpers';
+
+test('activation codes: generated format, normalization of typed input, whatsapp message', () => {
+  const code = generateActivationCode();
+  assert.match(code, ACTIVATION_CODE_REGEX);
+  assert.equal(normalizeActivationCode(' act-ab12 cd34 '), 'ACT-AB12CD34');
+  assert.equal(normalizeActivationCode('ab12cd34'), 'ACT-AB12CD34');
+  assert.equal(normalizeActivationCode('ACTAB12CD34'), 'ACT-AB12CD34');
+  const msg = buildActivationWhatsAppMessage({
+    studentName: 'علي', bookingCode: 'ADM-ABC123', activationCode: 'ACT-AB12CD34', siteOrigin: 'https://adham-teach.online/',
+  });
+  assert.ok(msg.includes('ACT-AB12CD34'));
+  assert.ok(msg.includes('https://adham-teach.online/dashboard?code=ACT-AB12CD34'));
+});

@@ -1,7 +1,10 @@
 import React from 'react';
 import {
   CheckCircle2,
+  Copy,
   ExternalLink,
+  KeyRound,
+  MessageCircle,
   Hash,
   Search,
   Smartphone,
@@ -15,7 +18,7 @@ import {
   getModeLabel,
   sanitizeExternalUrl,
 } from '../lib/helpers';
-import type { Booking } from '../types/models';
+import type { ActivationCode, Booking } from '../types/models';
 
 interface BookingsAndReceiptsTabProps {
   mode: 'bookings' | 'receipts';
@@ -27,6 +30,10 @@ interface BookingsAndReceiptsTabProps {
   onSearchChange: (v: string) => void;
   onStatusFilterChange: (v: string) => void;
   onZoomReceipt: (url: string) => void;
+  activationCodes: ActivationCode[];
+  onIssueCode: (booking: Booking) => void;
+  onSendActivation: (booking: Booking, code: ActivationCode) => void;
+  onCopyCode: (code: string) => void;
   onOpenConfirm: (booking: Booking) => void;
   onOpenReject: (booking: Booking) => void;
 }
@@ -41,6 +48,10 @@ export function BookingsAndReceiptsTab({
   onSearchChange,
   onStatusFilterChange,
   onZoomReceipt,
+  activationCodes,
+  onIssueCode,
+  onSendActivation,
+  onCopyCode,
   onOpenConfirm,
   onOpenReject,
 }: BookingsAndReceiptsTabProps) {
@@ -60,6 +71,13 @@ export function BookingsAndReceiptsTab({
             (b.paymentProof?.senderAccount ?? '').toLowerCase().includes(q)
           );
         });
+
+  // Latest activation code per booking (list arrives newest-first)
+  const codeByBooking = new Map<string, ActivationCode>();
+  for (const c of activationCodes) {
+    const prev = codeByBooking.get(c.bookingId);
+    if (!prev) codeByBooking.set(c.bookingId, c);
+  }
 
   return (
     <div className="space-y-5">
@@ -112,6 +130,7 @@ export function BookingsAndReceiptsTab({
               booking.packageLabel || getLegacyPackageLabel(booking.packageType ?? booking.packageId, 'ar');
             const safeLink = sanitizeExternalUrl(booking.classLink);
             const safeReceipt = sanitizeExternalUrl(booking.receiptUrl);
+            const activation = codeByBooking.get(booking.id);
 
             return (
               <div
@@ -217,6 +236,63 @@ export function BookingsAndReceiptsTab({
                           {booking.paymentProof.transactionRef}
                         </span>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Subscription activation code (confirmed bookings only) */}
+                  {booking.status === 'confirmed' && (
+                    <div className="rounded-xl border border-[#EFB9A0] bg-[#FEEADD]/60 p-3 text-xs space-y-2">
+                      <p className="inline-flex items-center gap-1.5 font-bold text-[#14202B]">
+                        <KeyRound className="h-3.5 w-3.5 text-[#187B97]" />
+                        كود تفعيل الاشتراك
+                      </p>
+                      {activation ? (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span dir="ltr" className="rounded bg-white px-2 py-1 font-mono text-sm font-bold tracking-wider text-[#187B97]">
+                              {activation.id}
+                            </span>
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                activation.status === 'used'
+                                  ? 'bg-emerald-50 text-emerald-800'
+                                  : 'bg-amber-50 text-amber-800'
+                              }`}
+                            >
+                              {activation.status === 'used' ? 'تم التفعيل من الطالب ✓' : 'لم يُستخدم بعد'}
+                            </span>
+                          </div>
+                          {activation.status === 'unused' && (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onSendActivation(booking, activation)}
+                                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 text-[11px] font-bold text-white hover:bg-emerald-700"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" />
+                                <span>إرسال الكود على واتساب</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onCopyCode(activation.id)}
+                                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-full bg-white px-3.5 text-[11px] font-bold text-[#14202B] hover:bg-[#F6ECE1]"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                <span>نسخ</span>
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onIssueCode(booking)}
+                          className="inline-flex min-h-[34px] items-center gap-1.5 rounded-full bg-[#187B97] px-3.5 text-[11px] font-bold text-white hover:bg-[#267688]"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          <span>إنشاء كود تفعيل</span>
+                        </button>
+                      )}
                     </div>
                   )}
 

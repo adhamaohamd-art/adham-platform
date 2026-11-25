@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import {
   Bell,
@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckCircle2,
   ExternalLink,
+  KeyRound,
   LogOut,
   Megaphone,
   Save,
@@ -16,11 +17,15 @@ import { useAdminAuth } from '../hooks/useAdminAuth';
 import { useLanguage } from '../hooks/useLanguage';
 import { useSiteData } from '../hooks/useSiteData';
 import { db } from '../lib/firebase';
-import { formatSlotDateLabel, sanitizeExternalUrl } from '../lib/helpers';
+import { redeemActivationCode } from '../lib/bookingService';
+import { formatSlotDateLabel, normalizeActivationCode, sanitizeExternalUrl } from '../lib/helpers';
 import type { StudentProfile } from '../types/models';
+
+const PENDING_CODE_KEY = 'adham_pending_activation_code';
 
 export function StudentDashboardPage() {
   const { lang, t } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, isAdmin, loading, logout } = useAdminAuth();
   const { settings } = useSiteData();
 
@@ -30,6 +35,36 @@ export function StudentDashboardPage() {
   const [gradeInput, setGradeInput] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
+
+  const [codeInput, setCodeInput] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [codeSuccess, setCodeSuccess] = useState<string | null>(null);
+
+  // A link like /dashboard?code=ACT-XXXXXXXX (from the WhatsApp message) pre-fills the code.
+  // If the student is not signed in yet, keep it across the login redirect.
+  useEffect(() => {
+    const fromUrl = searchParams.get('code');
+    if (fromUrl) {
+      try {
+        sessionStorage.setItem(PENDING_CODE_KEY, fromUrl);
+      } catch {
+        /* storage may be unavailable */
+      }
+      // Only clean the URL once signed in, so we don't fight the redirect to /login
+      if (user) setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, user]);
+
+  useEffect(() => {
+    if (!user || isAdmin) return;
+    try {
+      const pending = sessionStorage.getItem(PENDING_CODE_KEY);
+      if (pending) setCodeInput(normalizeActivationCode(pending));
+    } catch {
+      /* ignore */
+    }
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (!user || isAdmin) return;
@@ -57,6 +92,35 @@ export function StudentDashboardPage() {
   if (isAdmin) return <Navigate to="/admin" replace />;
 
   const safeClassLink = sanitizeExternalUrl(profile?.classLink);
+
+  const handleRedeem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !codeInput.trim()) return;
+    setRedeeming(true);
+    setCodeError(null);
+    setCodeSuccess(null);
+    try {
+      const res = await redeemActivationCode(user.uid, codeInput);
+      setCodeSuccess(
+        t(
+          `تم تفعيل اشتراكك: ${res.packageLabel} (+${res.sessionsAdded} حصة) 🎉`,
+          `Subscription activated: ${res.packageLabel} (+${res.sessionsAdded} sessions) 🎉`
+        )
+      );
+      setCodeInput('');
+      try {
+        sessionStorage.removeItem(PENDING_CODE_KEY);
+      } catch {
+        /* ignore */
+      }
+    } catch (err) {
+      setCodeError((err as Error).message);
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  const hasActivePackage = !!profile?.activePackage?.trim();
 
   const handleSaveBasicInfo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +188,60 @@ export function StudentDashboardPage() {
               </button>
             </div>
           </div>
+
+          {/* Activation code redeem */}
+          <form
+            onSubmit={handleRedeem}
+            className={`rounded-[24px] p-5 text-[#14202B] card-shadow ${
+              hasActivePackage ? 'bg-white' : 'border-2 border-[#187B97] bg-[#FEEADD]'
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="flex items-center gap-2 font-display text-base font-semibold">
+                  <KeyRound className="h-5 w-5 text-[#187B97]" />
+                  <span>{t('تفعيل اشتراك بكود', 'Activate a subscription')}</span>
+                </h2>
+                <p className="mt-1 text-xs text-[#14202B]/70">
+                  {t(
+                    'بعد تأكيد حجزك مستر أدهم هيبعتلك كود تفعيل على واتساب. اكتبه هنا وهتتضاف الباقة والحصص لحسابك.',
+                    'After your booking is confirmed, Mr. Adham sends you an activation code on WhatsApp. Enter it here.'
+                  )}
+                </p>
+              </div>
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={codeInput}
+                  onChange={(e) => {
+                    setCodeInput(e.target.value.toUpperCase());
+                    setCodeError(null);
+                  }}
+                  placeholder="ACT-XXXXXXXX"
+                  autoCapitalize="characters"
+                  className="min-h-[44px] w-full rounded-full border-2 border-[#14202B]/15 bg-white px-4 text-center font-mono text-sm font-bold tracking-wider focus:border-[#187B97] focus:outline-none sm:w-52"
+                />
+                <button
+                  type="submit"
+                  disabled={redeeming || !codeInput.trim()}
+                  className="min-h-[44px] w-full rounded-full bg-[#187B97] px-6 text-xs font-bold text-white hover:bg-[#267688] disabled:opacity-60 sm:w-auto"
+                >
+                  {redeeming ? t('جاري التفعيل...', 'Activating...') : t('تفعيل', 'Activate')}
+                </button>
+              </div>
+            </div>
+            {codeError && (
+              <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-800">
+                {codeError}
+              </p>
+            )}
+            {codeSuccess && (
+              <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+                {codeSuccess}
+              </p>
+            )}
+          </form>
 
           {/* Package & Sessions Stats */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

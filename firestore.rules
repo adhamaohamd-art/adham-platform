@@ -211,6 +211,60 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    function isValidActivationId(id) {
+      return id is string && id.matches('^ACT-[A-Z0-9]{8}$');
+    }
+
+    function isValidActivationCode(data) {
+      return data.keys().hasAll([
+          'bookingId', 'bookingCode', 'studentName', 'whatsapp', 'grade', 'courseTitle',
+          'packageLabel', 'sessionsCount', 'classLink', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'bookingId', 'bookingCode', 'studentName', 'whatsapp', 'grade', 'courseTitle',
+          'packageLabel', 'sessionsCount', 'classLink', 'status', 'createdAt', 'usedBy', 'usedAt'
+        ])
+        && isValidId(data.bookingId)
+        && isValidBookingCode(data.bookingCode)
+        && data.studentName is string && data.studentName.size() >= 2 && data.studentName.size() <= 120
+        && isEgyptianPhone(data.whatsapp)
+        && data.grade is string && data.grade.size() >= 1 && data.grade.size() <= 80
+        && data.courseTitle is string && data.courseTitle.size() <= 140
+        && data.packageLabel is string && data.packageLabel.size() >= 1 && data.packageLabel.size() <= 100
+        && data.sessionsCount is number && data.sessionsCount >= 1 && data.sessionsCount <= 24
+        && isSafeHttpsOrEmpty(data.classLink, 500)
+        && data.status in ['unused', 'used']
+        && data.createdAt is timestamp;
+    }
+
+    // Student redeems an activation code: every changed number must match the code document exactly.
+    function isActivationRedeem(uid) {
+      let codeId = incoming().lastActivationCode;
+      return isSignedIn()
+        && request.auth.uid == uid
+        && incoming().lastActivationCode is string
+        && isValidActivationId(codeId)
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'activePackage', 'totalSessions', 'remainingSessions', 'classLink',
+          'whatsapp', 'grade', 'lastActivationCode'
+        ])
+        && get(/databases/$(database)/documents/activationCodes/$(codeId)).data.status == 'unused'
+        && getAfter(/databases/$(database)/documents/activationCodes/$(codeId)).data.status == 'used'
+        && getAfter(/databases/$(database)/documents/activationCodes/$(codeId)).data.usedBy == uid
+        && incoming().totalSessions == existing().totalSessions
+          + get(/databases/$(database)/documents/activationCodes/$(codeId)).data.sessionsCount
+        && incoming().remainingSessions == existing().remainingSessions
+          + get(/databases/$(database)/documents/activationCodes/$(codeId)).data.sessionsCount
+        && incoming().activePackage == get(/databases/$(database)/documents/activationCodes/$(codeId)).data.packageLabel
+        && incoming().whatsapp == get(/databases/$(database)/documents/activationCodes/$(codeId)).data.whatsapp
+        && incoming().grade == get(/databases/$(database)/documents/activationCodes/$(codeId)).data.grade
+        && (
+          (get(/databases/$(database)/documents/activationCodes/$(codeId)).data.classLink == ''
+            && incoming().classLink == existing().classLink)
+          || incoming().classLink == get(/databases/$(database)/documents/activationCodes/$(codeId)).data.classLink
+        );
+    }
+
     function isValidTestimonial(data) {
       return data.keys().hasAll(['type', 'order', 'isVisible'])
         && data.keys().hasOnly(['type', 'name', 'role', 'text', 'imageUrl', 'order', 'isVisible'])
@@ -350,6 +404,29 @@ service cloud.firestore {
         isSignedIn()
         && request.auth.uid == uid
         && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'whatsapp', 'grade'])
+      ) || isActivationRedeem(uid);
+      allow delete: if isAdmin();
+    }
+
+    // One-time subscription activation codes. The code itself is the doc id (secret, unlistable).
+    // Admin creates them when confirming a booking; the signed-in student burns one while
+    // adding its sessions to their own profile (see isActivationRedeem).
+    match /activationCodes/{codeId} {
+      allow get: if isSignedIn() && isValidActivationId(codeId);
+      allow list: if isAdmin();
+      allow create: if isValidActivationId(codeId)
+        && isValidActivationCode(incoming())
+        && incoming().status == 'unused'
+        && incoming().createdAt == request.time
+        && isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn()
+        && existing().status == 'unused'
+        && incoming().status == 'used'
+        && incoming().usedBy == request.auth.uid
+        && incoming().usedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'usedBy', 'usedAt'])
+        && getAfter(/databases/$(database)/documents/students/$(request.auth.uid)).data.lastActivationCode == codeId
       );
       allow delete: if isAdmin();
     }

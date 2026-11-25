@@ -48,7 +48,31 @@ export interface StudentProfile {
   nextSessionNote?: string;
   classLink?: string;
   attendanceLog: AttendanceEntry[];
+  /** Last activation code redeemed by this student (set by the redeem flow) */
+  lastActivationCode?: string;
   createdAt?: Timestamp | Date;
+}
+
+/**
+ * One-time code the teacher sends over WhatsApp after confirming a booking.
+ * The student signs in and redeems it to activate the subscription on their account.
+ * Document id == the code itself (ACT-XXXXXXXX).
+ */
+export interface ActivationCode {
+  id: string;
+  bookingId: string;
+  bookingCode: string;
+  studentName: string;
+  whatsapp: string;
+  grade: string;
+  courseTitle: string;
+  packageLabel: string;
+  sessionsCount: number;
+  classLink: string;
+  status: 'unused' | 'used';
+  usedBy?: string;
+  usedAt?: Timestamp | Date;
+  createdAt: Timestamp | Date;
 }
 
 export interface BroadcastPost {

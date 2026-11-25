@@ -15,8 +15,11 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import {
+  ACTIVATION_CODE_REGEX,
   buildLookupDocId,
+  generateActivationCode,
   generateBookingCode,
+  normalizeActivationCode,
   normalizePhoneDigits,
   sanitizeExternalUrl,
   toDate,
@@ -28,6 +31,7 @@ import {
   buildFallbackDemoSlots,
 } from '../data/seed';
 import type {
+  ActivationCode,
   Booking,
   BookingLookup,
   BookingMode,
@@ -38,6 +42,7 @@ import type {
   Slot,
   SlotSummary,
   StudentDetails,
+  StudentProfile,
 } from '../types/models';
 
 export class SlotUnavailableError extends Error {
@@ -257,7 +262,24 @@ export async function lookupBookingByCodeAndPhone(
   }
 }
 
-export async function confirmBookingAsAdmin(booking: Booking, classLink: string): Promise<void> {
+function buildActivationCodeData(booking: Booking, classLink: string) {
+  return {
+    bookingId: booking.id,
+    bookingCode: booking.code,
+    studentName: booking.student.name,
+    whatsapp: booking.student.whatsapp,
+    grade: booking.student.grade,
+    courseTitle: booking.courseTitle,
+    packageLabel: booking.packageLabel || booking.courseTitle,
+    sessionsCount: booking.sessionsCount || booking.slotIds.length || 1,
+    classLink,
+    status: 'unused' as const,
+    createdAt: serverTimestamp(),
+  };
+}
+
+/** Confirms a booking AND issues its one-time activation code in the same atomic batch. Returns the code. */
+export async function confirmBookingAsAdmin(booking: Booking, classLink: string): Promise<string> {
   const rawLink = classLink.trim();
   const safeLink = rawLink ? sanitizeExternalUrl(rawLink) : '';
   if (rawLink && !safeLink) {
@@ -283,9 +305,83 @@ export async function confirmBookingAsAdmin(booking: Booking, classLink: string)
         bookingId: booking.id,
       });
     }
+    const activationCode = generateActivationCode();
+    batch.set(doc(db, 'activationCodes', activationCode), buildActivationCodeData(booking, safeLink ?? ''));
     await batch.commit();
+    return activationCode;
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `bookings/${booking.id}`);
+  }
+}
+
+/** For bookings confirmed before activation codes existed (or a lost code): issue a fresh code. */
+export async function issueActivationCodeAsAdmin(booking: Booking): Promise<string> {
+  const activationCode = generateActivationCode();
+  try {
+    await setDoc(
+      doc(db, 'activationCodes', activationCode),
+      buildActivationCodeData(booking, sanitizeExternalUrl(booking.classLink) ?? '')
+    );
+    return activationCode;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `activationCodes/${activationCode}`);
+  }
+}
+
+export class ActivationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ActivationError';
+  }
+}
+
+export interface RedeemResult {
+  packageLabel: string;
+  sessionsAdded: number;
+}
+
+/**
+ * Student redeems a code: adds the sessions to their own profile and burns the code,
+ * atomically. Firestore rules re-verify every number against the code document.
+ */
+export async function redeemActivationCode(uid: string, rawCode: string): Promise<RedeemResult> {
+  const code = normalizeActivationCode(rawCode);
+  if (!ACTIVATION_CODE_REGEX.test(code)) {
+    throw new ActivationError('صيغة الكود غير صحيحة. مثال: ACT-AB12CD34');
+  }
+  const codeRef = doc(db, 'activationCodes', code);
+  const studentRef = doc(db, 'students', uid);
+
+  try {
+    return await runTransaction(db, async (tx) => {
+      const [codeSnap, studentSnap] = await Promise.all([tx.get(codeRef), tx.get(studentRef)]);
+      if (!codeSnap.exists()) throw new ActivationError('الكود ده غير موجود. تأكد منه أو كلّم مستر أدهم.');
+      const data = codeSnap.data() as Omit<ActivationCode, 'id'>;
+      if (data.status !== 'unused') throw new ActivationError('الكود ده اتستخدم قبل كده.');
+      if (!studentSnap.exists()) {
+        throw new ActivationError('حسابك لسه بيتجهز، سجّل خروج وادخل تاني وجرّب.');
+      }
+      const current = studentSnap.data() as StudentProfile;
+
+      tx.update(studentRef, {
+        activePackage: data.packageLabel,
+        totalSessions: (current.totalSessions ?? 0) + data.sessionsCount,
+        remainingSessions: (current.remainingSessions ?? 0) + data.sessionsCount,
+        classLink: data.classLink ? data.classLink : (current.classLink ?? ''),
+        whatsapp: data.whatsapp,
+        grade: data.grade,
+        lastActivationCode: code,
+      });
+      tx.update(codeRef, { status: 'used', usedBy: uid, usedAt: serverTimestamp() });
+      return { packageLabel: data.packageLabel, sessionsAdded: data.sessionsCount };
+    });
+  } catch (err) {
+    if (err instanceof ActivationError) throw err;
+    const c = (err as { code?: string })?.code;
+    if (c === 'permission-denied') {
+      throw new ActivationError('تعذر تفعيل الكود. تأكد إنه صحيح وإنه لم يُستخدم، أو كلّم مستر أدهم.');
+    }
+    throw new ActivationError('حصلت مشكلة أثناء التفعيل، حاول تاني.');
   }
 }
 

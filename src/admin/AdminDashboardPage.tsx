@@ -24,10 +24,12 @@ import { db } from '../lib/firebase';
 import { DEFAULT_SETTINGS } from '../data/seed';
 import {
   confirmBookingAsAdmin,
+  issueActivationCodeAsAdmin,
   rejectBookingAsAdmin,
   seedInitialDatabase,
 } from '../lib/bookingService';
 import {
+  buildActivationWhatsAppMessage,
   formatPriceEGP,
   formatSlotTimeLabel,
   formatWhatsAppUrl,
@@ -44,7 +46,7 @@ import { BookingsAndReceiptsTab } from './BookingsAndReceiptsTab';
 import { StudentsManagerTab } from './StudentsManagerTab';
 import { BroadcastManagerTab } from './BroadcastManagerTab';
 import { VideosManagerTab } from './VideosManagerTab';
-import type { Booking, Course, SiteSettings, Slot, Testimonial } from '../types/models';
+import type { ActivationCode, Booking, Course, SiteSettings, Slot, Testimonial } from '../types/models';
 
 type AdminTab =
   | 'today'
@@ -85,6 +87,7 @@ export function AdminDashboardPage() {
   const [bookingsLimit, setBookingsLimit] = useState<number>(BOOKINGS_PAGE_SIZE);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [seeding, setSeeding] = useState(false);
+  const [activationCodes, setActivationCodes] = useState<ActivationCode[]>([]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -146,11 +149,20 @@ export function AdminDashboardPage() {
       setTestimonials(list);
     });
 
+    const unsubCodes = onSnapshot(
+      query(collection(db, 'activationCodes'), orderBy('createdAt', 'desc'), limit(300)),
+      (snap) => {
+        setActivationCodes(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ActivationCode, 'id'>) })));
+      },
+      (err) => console.error('[admin] activationCodes listener failed:', err)
+    );
+
     return () => {
       unsubSettings();
       unsubCourses();
       unsubSlots();
       unsubTestimonials();
+      unsubCodes();
     };
   }, [user, isAdmin]);
 
@@ -240,19 +252,47 @@ export function AdminDashboardPage() {
     if (!confirmingBooking) return;
     setProcessingAction(true);
     try {
-      await confirmBookingAsAdmin(confirmingBooking, classLinkInput);
-      const linkLine = classLinkInput.trim() ? `\nلينك الحصة: ${classLinkInput.trim()}` : '';
+      const activationCode = await confirmBookingAsAdmin(confirmingBooking, classLinkInput);
       const waHref = formatWhatsAppUrl(
         confirmingBooking.student.whatsapp,
-        `أهلاً ${confirmingBooking.student.name}، تم تأكيد حجزك (${confirmingBooking.code}) مع مستر أدهم بنجاح!${linkLine}`
+        buildActivationWhatsAppMessage({
+          studentName: confirmingBooking.student.name,
+          bookingCode: confirmingBooking.code,
+          activationCode,
+          classLink: classLinkInput,
+          siteOrigin: window.location.origin,
+        })
       );
-      setActionWhatsAppBanner({ title: 'تم تأكيد الحجز بنجاح!', waHref });
+      setActionWhatsAppBanner({ title: `تم تأكيد الحجز وإنشاء كود التفعيل ${activationCode}`, waHref });
       setConfirmingBooking(null);
       setClassLinkInput('');
     } catch (err) {
       showToast((err as Error).message);
     } finally {
       setProcessingAction(false);
+    }
+  };
+
+  const sendActivationWhatsApp = (booking: Booking, code: ActivationCode) => {
+    const waHref = formatWhatsAppUrl(
+      booking.student.whatsapp,
+      buildActivationWhatsAppMessage({
+        studentName: booking.student.name,
+        bookingCode: booking.code,
+        activationCode: code.id,
+        classLink: booking.classLink,
+        siteOrigin: window.location.origin,
+      })
+    );
+    window.open(waHref, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleIssueCode = async (booking: Booking) => {
+    try {
+      const code = await issueActivationCodeAsAdmin(booking);
+      showToast(`تم إنشاء كود التفعيل ${code} للطالب ${booking.student.name}.`);
+    } catch (err) {
+      showToast((err as Error).message);
     }
   };
 
@@ -489,6 +529,12 @@ export function AdminDashboardPage() {
             onSearchChange={setSearchQuery}
             onStatusFilterChange={setStatusFilter}
             onZoomReceipt={setZoomedReceiptUrl}
+            activationCodes={activationCodes}
+            onIssueCode={handleIssueCode}
+            onSendActivation={sendActivationWhatsApp}
+            onCopyCode={(c) => {
+              void navigator.clipboard?.writeText(c).then(() => showToast(`تم نسخ الكود ${c}`));
+            }}
             onOpenConfirm={(b) => {
               setConfirmingBooking(b);
               setClassLinkInput(b.classLink || '');
@@ -536,6 +582,9 @@ export function AdminDashboardPage() {
             <h3 className="font-display text-lg font-bold">
               تأكيد حجز {confirmingBooking.student.name}
             </h3>
+            <p className="rounded-xl bg-emerald-50 p-3 text-[11px] leading-relaxed text-emerald-900">
+              بعد التأكيد هيتعمل تلقائياً كود تفعيل للطالب وتبعتهوله على واتساب، والطالب يدخله من حسابه فيتفعّل اشتراكه وحصصه.
+            </p>
             <div>
               <label className="mb-1 block text-xs font-semibold">
                 رابط حصة Zoom أو Google Meet (يجب أن يبدأ بـ https://)

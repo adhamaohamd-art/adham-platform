@@ -50,6 +50,49 @@ export function generateBookingCode(): string {
   return `ADM-${suffix}`;
 }
 
+export const ACTIVATION_CODE_REGEX = /^ACT-[A-Z0-9]{8}$/;
+
+/** Secure one-time subscription activation code (ACT-XXXXXXXX), ~40 bits of entropy. */
+export function generateActivationCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const length = 8;
+  const bytes = new Uint8Array(length);
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let suffix = '';
+  for (let i = 0; i < length; i += 1) suffix += alphabet[bytes[i] % alphabet.length];
+  return `ACT-${suffix}`;
+}
+
+/** Accepts what a student might type: spaces, lowercase, missing ACT- prefix, Arabic-Indic digits. */
+export function normalizeActivationCode(raw: string): string {
+  const cleaned = normalizePhoneDigits(raw ?? '')
+    .toUpperCase()
+    .replace(/[\s_]/g, '');
+  const body = cleaned.replace(/^ACT-?/, '').replace(/-/g, '');
+  return `ACT-${body}`;
+}
+
+/** WhatsApp text the teacher sends after confirming: booking details + activation code + deep link. */
+export function buildActivationWhatsAppMessage(args: {
+  studentName: string;
+  bookingCode: string;
+  activationCode: string;
+  classLink?: string;
+  siteOrigin: string;
+}): string {
+  const link = `${args.siteOrigin.replace(/\/$/, '')}/dashboard?code=${encodeURIComponent(args.activationCode)}`;
+  const classLine = args.classLink?.trim() ? `\nلينك الحصة: ${args.classLink.trim()}` : '';
+  return (
+    `أهلاً ${args.studentName}، تم تأكيد حجزك (${args.bookingCode}) مع مستر أدهم بنجاح ✅${classLine}\n\n` +
+    `كود تفعيل اشتراكك على المنصة:\n${args.activationCode}\n\n` +
+    `سجّل دخولك بإيميلك أو جوجل وافتح اللينك ده والاشتراك هيتفعّل لوحده:\n${link}`
+  );
+}
+
 /** Validates that a URL uses strict https:// (prevents javascript: and open-redirect XSS). */
 export function isSafeHttpsUrl(raw: string | undefined | null): boolean {
   if (!raw) return false;

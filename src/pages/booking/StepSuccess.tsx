@@ -98,6 +98,18 @@ export function StepSuccess({
         </div>
       )}
 
+      <div className="mx-auto max-w-md rounded-2xl bg-white p-4 text-start text-xs leading-relaxed text-[#14202B]/80">
+        <p className="font-bold text-[#187B97]">{t('إيه الخطوة الجاية؟', 'What happens next?')}</p>
+        <ol className="mt-1.5 list-decimal space-y-1 ps-5">
+          <li>{t('مستر أدهم بيراجع التحويل ويأكد حجزك.', 'Mr. Adham reviews your transfer and confirms the booking.')}</li>
+          <li>{t('هيبعتلك على واتساب كود تفعيل الاشتراك.', 'He sends you an activation code on WhatsApp.')}</li>
+          <li>{t('سجّل دخولك بحسابك وادخل الكود، والباقة والحصص بتتفعّل على حسابك.', 'Sign in and enter the code to activate your package and sessions on your account.')}</li>
+        </ol>
+        <Link to="/login" className="mt-2 inline-block font-bold text-[#187B97] underline">
+          {t('أنشئ حسابك أو سجّل دخولك من دلوقتي', 'Create your account or sign in now')}
+        </Link>
+      </div>
+
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
         <Link
           to={`/track?code=${encodeURIComponent(confirmation.code)}&phone=${encodeURIComponent(studentWhatsapp)}`}
