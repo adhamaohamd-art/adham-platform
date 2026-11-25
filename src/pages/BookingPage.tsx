@@ -7,6 +7,9 @@ import { AlertCircle } from 'lucide-react';
 import { PageFrame } from '../components/PageFrame';
 import { useLanguage } from '../hooks/useLanguage';
 import { useSiteData } from '../hooks/useSiteData';
+import { useAdminAuth } from '../hooks/useAdminAuth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import {
   EGYPT_PHONE_REGEX,
   findWeeklyMatchingSlots,
@@ -49,6 +52,9 @@ export function BookingPage() {
   const { lang, t } = useLanguage();
   const { courses, settings, loading: loadingSiteData, isLiveFirestoreSeeded } = useSiteData();
   const [searchParams] = useSearchParams();
+  const { user, isAdmin, loginWithGoogle, authError, clearError } = useAdminAuth();
+  const [signingIn, setSigningIn] = useState(false);
+  const studentUser = user && !isAdmin ? user : null;
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
@@ -143,6 +149,40 @@ export function BookingPage() {
       cancelled = true;
     };
   }, [selectedCourse?.id, slotsReloadKey]);
+
+  // Signed-in student: pre-fill name / WhatsApp from their profile (only fields still empty)
+  useEffect(() => {
+    if (!studentUser) return;
+    let cancelled = false;
+    void (async () => {
+      let profileName = '';
+      let profileWhatsapp = '';
+      try {
+        const snap = await getDoc(doc(db, 'students', studentUser.uid));
+        if (snap.exists()) {
+          const d = snap.data() as { name?: string; whatsapp?: string };
+          profileName = d.name ?? '';
+          profileWhatsapp = d.whatsapp ?? '';
+        }
+      } catch {
+        /* profile not readable yet — fall back to auth display name */
+      }
+      if (cancelled) return;
+      const name = profileName || studentUser.displayName || '';
+      if (name && !getValues('name')) setValue('name', name);
+      if (profileWhatsapp && !getValues('whatsapp')) setValue('whatsapp', profileWhatsapp);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [studentUser?.uid, getValues, setValue]);
+
+  const handleInlineGoogleSignIn = async () => {
+    setSigningIn(true);
+    clearError();
+    await loginWithGoogle({ noRedirect: true });
+    setSigningIn(false);
+  };
 
   const gradeOptions = useMemo(
     () => (selectedCourse ? getCourseGradeOptions(selectedCourse) : []),
@@ -274,6 +314,7 @@ export function BookingPage() {
           senderAccount: cleanSender,
           transactionRef: cleanRef,
         },
+        studentUid: studentUser?.uid,
       });
       setConfirmation(result);
     } catch (err) {
@@ -332,6 +373,7 @@ export function BookingPage() {
               studentWhatsapp={getValues().whatsapp}
               studentName={getValues().name}
               settings={settings}
+              autoActivation={!!studentUser}
             />
           ) : (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -397,8 +439,18 @@ export function BookingPage() {
                     register={register}
                     errors={errors}
                     gradeOptions={gradeOptions}
+                    signedInName={studentUser ? studentUser.displayName || studentUser.email : null}
+                    signingIn={signingIn}
+                    signInError={authError}
+                    onGoogleSignIn={() => void handleInlineGoogleSignIn()}
                     onBack={() => setStep(2)}
-                    onSubmitStep={() => void handleSubmit(() => setStep(4))()}
+                    onSubmitStep={() =>
+                      void handleSubmit(() => {
+                        // Most students pay from their own number → save them retyping it
+                        if (!senderAccount.trim()) setSenderAccount(normalizePhoneDigits(getValues().whatsapp));
+                        setStep(4);
+                      })()
+                    }
                   />
                 )}
 

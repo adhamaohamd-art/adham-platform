@@ -7,6 +7,7 @@ import {
   orderBy,
   query,
   runTransaction,
+  increment,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -119,6 +120,8 @@ export interface CreateBookingInput {
   student: StudentDetails;
   paymentMethod: PaymentMethod;
   paymentProof: PaymentProof;
+  /** Signed-in student's uid (optional) → lets the admin's confirm auto-activate their subscription */
+  studentUid?: string;
 }
 
 export interface CreatedBookingResult {
@@ -188,6 +191,7 @@ export async function submitBookingTransaction(
         status: 'pending_review',
         rejectionReason: '',
         classLink: '',
+        ...(input.studentUid ? { studentUid: input.studentUid } : {}),
         createdAt: serverTimestamp(),
       });
 
@@ -278,8 +282,19 @@ function buildActivationCodeData(booking: Booking, classLink: string) {
   };
 }
 
-/** Confirms a booking AND issues its one-time activation code in the same atomic batch. Returns the code. */
-export async function confirmBookingAsAdmin(booking: Booking, classLink: string): Promise<string> {
+export interface ConfirmBookingResult {
+  /** One-time code to send over WhatsApp. null when the subscription was auto-activated. */
+  activationCode: string | null;
+  /** True when the student was signed in while booking → sessions were added to their account directly. */
+  autoActivated: boolean;
+}
+
+/**
+ * Confirms a booking in one atomic batch:
+ * - student booked while signed in  → sessions are added straight to their account (no code needed)
+ * - student booked as a guest       → a one-time activation code is issued to send on WhatsApp
+ */
+export async function confirmBookingAsAdmin(booking: Booking, classLink: string): Promise<ConfirmBookingResult> {
   const rawLink = classLink.trim();
   const safeLink = rawLink ? sanitizeExternalUrl(rawLink) : '';
   if (rawLink && !safeLink) {
@@ -305,10 +320,33 @@ export async function confirmBookingAsAdmin(booking: Booking, classLink: string)
         bookingId: booking.id,
       });
     }
-    const activationCode = generateActivationCode();
-    batch.set(doc(db, 'activationCodes', activationCode), buildActivationCodeData(booking, safeLink ?? ''));
+    let autoActivated = false;
+    let activationCode: string | null = null;
+
+    if (booking.studentUid) {
+      const studentRef = doc(db, 'students', booking.studentUid);
+      const studentSnap = await getDoc(studentRef);
+      if (studentSnap.exists()) {
+        const sessions = booking.sessionsCount || booking.slotIds.length || 1;
+        const current = studentSnap.data() as { classLink?: string };
+        batch.update(studentRef, {
+          activePackage: booking.packageLabel || booking.courseTitle,
+          totalSessions: increment(sessions),
+          remainingSessions: increment(sessions),
+          classLink: safeLink ? safeLink : (current.classLink ?? ''),
+          whatsapp: booking.student.whatsapp,
+          grade: booking.student.grade,
+        });
+        autoActivated = true;
+      }
+    }
+
+    if (!autoActivated) {
+      activationCode = generateActivationCode();
+      batch.set(doc(db, 'activationCodes', activationCode), buildActivationCodeData(booking, safeLink ?? ''));
+    }
     await batch.commit();
-    return activationCode;
+    return { activationCode, autoActivated };
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `bookings/${booking.id}`);
   }

@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseOptions } from 'firebase/app';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -52,11 +52,16 @@ function resolveFirebaseConfig(): {
 const resolved = resolveFirebaseConfig();
 const app = initializeApp(resolved.options);
 
-// Enable Firebase App Check (reCAPTCHA v3) automatically when site key is configured
+// Enable Firebase App Check automatically when a reCAPTCHA site key is configured.
+// Default = reCAPTCHA Enterprise (what Google's reCAPTCHA console creates today, Firebase's recommendation).
+// Set VITE_RECAPTCHA_PROVIDER=v3 only if the key was created as a legacy v3 key with a secret key.
 if (typeof window !== 'undefined' && resolved.recaptchaSiteKey) {
   try {
+    const useLegacyV3 = import.meta.env.VITE_RECAPTCHA_PROVIDER === 'v3';
     initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(resolved.recaptchaSiteKey),
+      provider: useLegacyV3
+        ? new ReCaptchaV3Provider(resolved.recaptchaSiteKey)
+        : new ReCaptchaEnterpriseProvider(resolved.recaptchaSiteKey),
       isTokenAutoRefreshEnabled: true,
     });
   } catch (err) {

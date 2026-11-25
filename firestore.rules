@@ -161,8 +161,9 @@ service cloud.firestore {
           'code', 'courseId', 'courseTitle', 'packageId', 'packageLabel', 'sessionsCount',
           'packageType', 'mode', 'slotIds', 'slotSummaries', 'student', 'amount',
           'paymentMethod', 'paymentProof', 'receiptUrl', 'status', 'rejectionReason',
-          'classLink', 'createdAt'
+          'classLink', 'createdAt', 'studentUid'
         ])
+        && (!('studentUid' in data) || (data.studentUid is string && data.studentUid.size() >= 1 && data.studentUid.size() <= 128))
         && isValidBookingCode(data.code)
         && isValidId(data.courseId)
         && data.courseTitle is string && data.courseTitle.size() >= 2 && data.courseTitle.size() <= 140
@@ -352,6 +353,8 @@ service cloud.firestore {
         && incoming().status == 'pending_review'
         && incoming().rejectionReason == ''
         && incoming().classLink == ''
+        && incoming().receiptUrl == ''
+        && (!('studentUid' in incoming()) || (isSignedIn() && incoming().studentUid == request.auth.uid))
         && incoming().createdAt == request.time
         && exists(/databases/$(database)/documents/courses/$(incoming().courseId))
         && get(/databases/$(database)/documents/courses/$(incoming().courseId)).data.isActive == true

@@ -14,11 +14,13 @@ import {
 import {
   formatFullSlotSummary,
   formatPriceEGP,
+  getCoursePackages,
   getLegacyPackageLabel,
   getModeLabel,
   sanitizeExternalUrl,
+  toDate,
 } from '../lib/helpers';
-import type { ActivationCode, Booking } from '../types/models';
+import type { ActivationCode, Booking, Course } from '../types/models';
 
 interface BookingsAndReceiptsTabProps {
   mode: 'bookings' | 'receipts';
@@ -30,6 +32,8 @@ interface BookingsAndReceiptsTabProps {
   onSearchChange: (v: string) => void;
   onStatusFilterChange: (v: string) => void;
   onZoomReceipt: (url: string) => void;
+  courses: Course[];
+  onReleaseStale: (stale: Booking[]) => void;
   activationCodes: ActivationCode[];
   onIssueCode: (booking: Booking) => void;
   onSendActivation: (booking: Booking, code: ActivationCode) => void;
@@ -48,6 +52,8 @@ export function BookingsAndReceiptsTab({
   onSearchChange,
   onStatusFilterChange,
   onZoomReceipt,
+  courses,
+  onReleaseStale,
   activationCodes,
   onIssueCode,
   onSendActivation,
@@ -72,6 +78,19 @@ export function BookingsAndReceiptsTab({
           );
         });
 
+  const STALE_MS = 24 * 60 * 60 * 1000;
+  const isStale = (b: Booking) =>
+    b.status === 'pending_review' && !!b.createdAt && Date.now() - toDate(b.createdAt).getTime() > STALE_MS;
+  const staleBookings = bookings.filter(isStale);
+
+  /** Current package price for a booking, to flag amounts that don't match (tampered or outdated price). */
+  const expectedPriceOf = (b: Booking): number | null => {
+    const course = courses.find((c) => c.id === b.courseId);
+    if (!course) return null;
+    const pkg = getCoursePackages(course).find((p) => p.id === b.packageId);
+    return pkg ? pkg.price : null;
+  };
+
   // Latest activation code per booking (list arrives newest-first)
   const codeByBooking = new Map<string, ActivationCode>();
   for (const c of activationCodes) {
@@ -92,6 +111,17 @@ export function BookingsAndReceiptsTab({
               : 'ابحث بالاسم أو الكود أو رقم الواتساب أو رقم العملية مع تحميل تدريجي (Pagination).'}
           </p>
         </div>
+
+        {mode === 'receipts' && staleBookings.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onReleaseStale(staleBookings)}
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-amber-100 px-4 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-200"
+          >
+            <XCircle className="h-4 w-4" />
+            <span>تحرير المواعيد المتأخرة ({staleBookings.length})</span>
+          </button>
+        )}
 
         {mode === 'bookings' && (
           <div className="flex flex-wrap items-center gap-2">
@@ -131,6 +161,9 @@ export function BookingsAndReceiptsTab({
             const safeLink = sanitizeExternalUrl(booking.classLink);
             const safeReceipt = sanitizeExternalUrl(booking.receiptUrl);
             const activation = codeByBooking.get(booking.id);
+            const stale = isStale(booking);
+            const expectedPrice = expectedPriceOf(booking);
+            const priceMismatch = expectedPrice !== null && expectedPrice !== booking.amount;
 
             return (
               <div
@@ -167,6 +200,17 @@ export function BookingsAndReceiptsTab({
                     </span>
                   </div>
 
+                  {stale && (
+                    <p className="rounded-xl bg-amber-50 p-2.5 text-[11px] font-semibold text-amber-900">
+                      ⏰ الحجز ده معلّق من أكتر من 24 ساعة والمواعيد محجوزة عليه. راجعه أو ارفضه عشان تتحرر.
+                    </p>
+                  )}
+                  {priceMismatch && (
+                    <p className="rounded-xl bg-red-50 p-2.5 text-[11px] font-semibold text-red-800">
+                      ⚠️ المبلغ المسجّل ({formatPriceEGP(booking.amount, 'ar')}) مختلف عن سعر الباقة الحالي (
+                      {formatPriceEGP(expectedPrice ?? 0, 'ar')}). تأكد من المحفظة قبل التأكيد.
+                    </p>
+                  )}
                   <div className="rounded-xl bg-[#F6ECE1]/70 p-3 text-xs space-y-1">
                     <p>
                       <strong>الكورس:</strong> {booking.courseTitle}
@@ -246,7 +290,11 @@ export function BookingsAndReceiptsTab({
                         <KeyRound className="h-3.5 w-3.5 text-[#187B97]" />
                         كود تفعيل الاشتراك
                       </p>
-                      {activation ? (
+                      {!activation && booking.studentUid ? (
+                        <p className="rounded-lg bg-emerald-50 p-2 font-semibold text-emerald-800">
+                          ✓ اشتراك الطالب اتفعّل تلقائياً على حسابه (حجز وهو مسجّل دخول).
+                        </p>
+                      ) : activation ? (
                         <>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span dir="ltr" className="rounded bg-white px-2 py-1 font-mono text-sm font-bold tracking-wider text-[#187B97]">

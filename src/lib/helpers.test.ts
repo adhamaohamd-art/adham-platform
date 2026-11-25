@@ -194,3 +194,11 @@ test('activation codes: generated format, normalization of typed input, whatsapp
   assert.ok(msg.includes('ACT-AB12CD34'));
   assert.ok(msg.includes('https://adham-teach.online/dashboard?code=ACT-AB12CD34'));
 });
+
+import { buildAutoActivatedWhatsAppMessage } from './helpers';
+
+test('auto-activated whatsapp message has no code and points to the dashboard', () => {
+  const msg = buildAutoActivatedWhatsAppMessage({ studentName: 'علي', bookingCode: 'ADM-ABC123', siteOrigin: 'https://adham-teach.online/' });
+  assert.ok(!msg.includes('ACT-'));
+  assert.ok(msg.includes('https://adham-teach.online/dashboard'));
+});

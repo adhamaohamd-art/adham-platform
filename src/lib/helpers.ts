@@ -93,6 +93,20 @@ export function buildActivationWhatsAppMessage(args: {
   );
 }
 
+/** WhatsApp text when the student booked while signed in: nothing to enter, it's already on their account. */
+export function buildAutoActivatedWhatsAppMessage(args: {
+  studentName: string;
+  bookingCode: string;
+  classLink?: string;
+  siteOrigin: string;
+}): string {
+  const classLine = args.classLink?.trim() ? `\nلينك الحصة: ${args.classLink.trim()}` : '';
+  return (
+    `أهلاً ${args.studentName}، تم تأكيد حجزك (${args.bookingCode}) مع مستر أدهم بنجاح ✅${classLine}\n\n` +
+    `اشتراكك اتفعّل تلقائياً على حسابك، تقدر تتابع حصصك من هنا:\n${args.siteOrigin.replace(/\/$/, '')}/dashboard`
+  );
+}
+
 /** Validates that a URL uses strict https:// (prevents javascript: and open-redirect XSS). */
 export function isSafeHttpsUrl(raw: string | undefined | null): boolean {
   if (!raw) return false;

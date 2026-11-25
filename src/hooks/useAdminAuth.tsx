@@ -25,7 +25,7 @@ interface AdminAuthContextValue {
   authError: string | null;
   loginWithEmail: (email: string, password: string) => Promise<AuthResult>;
   registerWithEmail: (name: string, email: string, password: string) => Promise<AuthResult>;
-  loginWithGoogle: () => Promise<AuthResult>;
+  loginWithGoogle: (opts?: { noRedirect?: boolean }) => Promise<AuthResult>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -197,7 +197,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async (): Promise<AuthResult> => {
+  const loginWithGoogle = async (opts?: { noRedirect?: boolean }): Promise<AuthResult> => {
     setAuthError(null);
     try {
       const cred = await signInWithPopup(auth, googleProvider);
@@ -214,6 +214,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       }
       // Automatic fallback to full-page redirect if popup was blocked by browser
       if (code === 'auth/popup-blocked' || code === 'auth/cancelled-popup-request') {
+        if (opts?.noRedirect) {
+          setAuthError('المتصفح منع نافذة Google. اسمح بالنوافذ المنبثقة وحاول تاني، أو كمّل الحجز بدون تسجيل.');
+          return { ok: false, isAdmin: false };
+        }
         try {
           await signInWithRedirect(auth, googleProvider);
           return { ok: false, isAdmin: false };

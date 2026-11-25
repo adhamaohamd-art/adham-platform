@@ -16,11 +16,26 @@ interface StepStudentProps {
   errors: FieldErrors<StudentFormValues>;
   /** Grade choices allowed for the selected course: 0 = hide, 1 = fixed, 2+ = dropdown */
   gradeOptions: GradeOption[];
+  /** Optional inline sign-in: signed-in students get auto-filled data and automatic activation */
+  signedInName?: string | null;
+  signingIn?: boolean;
+  signInError?: string | null;
+  onGoogleSignIn?: () => void;
   onBack: () => void;
   onSubmitStep: () => void;
 }
 
-export function StepStudent({ register, errors, gradeOptions, onBack, onSubmitStep }: StepStudentProps) {
+export function StepStudent({
+  register,
+  errors,
+  gradeOptions,
+  signedInName,
+  signingIn,
+  signInError,
+  onGoogleSignIn,
+  onBack,
+  onSubmitStep,
+}: StepStudentProps) {
   const { lang, t } = useLanguage();
   const labelOf = (o: GradeOption) => (lang === 'en' && o.labelEn ? o.labelEn : o.label);
 
@@ -29,6 +44,39 @@ export function StepStudent({ register, errors, gradeOptions, onBack, onSubmitSt
       <h2 className="font-display text-xl font-semibold text-[#14202B]">
         {t('٣. بيانات الطالب والتواصل', '3. Student & Contact Details')}
       </h2>
+
+      {signedInName ? (
+        <p className="rounded-2xl bg-emerald-50 p-3.5 text-xs font-semibold leading-relaxed text-emerald-900">
+          ✓ {t('مسجّل دخول باسم', 'Signed in as')} {signedInName}.{' '}
+          {t(
+            'اشتراكك وحصصك هيتفعّلوا تلقائياً على حسابك بمجرد ما مستر أدهم يأكد الحجز.',
+            'Your subscription will activate automatically on your account once confirmed.'
+          )}
+        </p>
+      ) : (
+        onGoogleSignIn && (
+          <div className="rounded-2xl border border-[#187B97]/25 bg-[#187B97]/5 p-3.5">
+            <p className="text-xs leading-relaxed text-[#14202B]/80">
+              {t(
+                'اختياري: سجّل دخولك بجوجل وبياناتك هتتعبّى لوحدها، واشتراكك هيتفعّل تلقائياً بعد التأكيد من غير ما تحتاج كود.',
+                'Optional: sign in with Google to auto-fill your details and have your subscription activate automatically.'
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={onGoogleSignIn}
+              disabled={signingIn}
+              className="mt-2.5 inline-flex min-h-[42px] items-center rounded-full border-2 border-[#14202B] bg-white px-5 text-xs font-bold text-[#14202B] hover:bg-[#FEEADD] disabled:opacity-60"
+            >
+              {signingIn ? t('جاري التسجيل...', 'Signing in...') : t('المتابعة بحساب Google', 'Continue with Google')}
+            </button>
+            {signInError && <p className="mt-2 text-[11px] font-semibold text-red-700">{signInError}</p>}
+            <p className="mt-2 text-[11px] text-[#14202B]/55">
+              {t('أو كمّل بالبيانات بالأسفل بدون تسجيل — مفيش مشكلة.', 'Or just continue below without signing in.')}
+            </p>
+          </div>
+        )
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

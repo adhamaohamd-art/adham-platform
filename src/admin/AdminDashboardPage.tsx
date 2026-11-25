@@ -30,6 +30,7 @@ import {
 } from '../lib/bookingService';
 import {
   buildActivationWhatsAppMessage,
+  buildAutoActivatedWhatsAppMessage,
   formatPriceEGP,
   formatSlotTimeLabel,
   formatWhatsAppUrl,
@@ -252,18 +253,29 @@ export function AdminDashboardPage() {
     if (!confirmingBooking) return;
     setProcessingAction(true);
     try {
-      const activationCode = await confirmBookingAsAdmin(confirmingBooking, classLinkInput);
-      const waHref = formatWhatsAppUrl(
-        confirmingBooking.student.whatsapp,
-        buildActivationWhatsAppMessage({
-          studentName: confirmingBooking.student.name,
-          bookingCode: confirmingBooking.code,
-          activationCode,
-          classLink: classLinkInput,
-          siteOrigin: window.location.origin,
-        })
-      );
-      setActionWhatsAppBanner({ title: `تم تأكيد الحجز وإنشاء كود التفعيل ${activationCode}`, waHref });
+      const { activationCode, autoActivated } = await confirmBookingAsAdmin(confirmingBooking, classLinkInput);
+      const message =
+        autoActivated || !activationCode
+          ? buildAutoActivatedWhatsAppMessage({
+              studentName: confirmingBooking.student.name,
+              bookingCode: confirmingBooking.code,
+              classLink: classLinkInput,
+              siteOrigin: window.location.origin,
+            })
+          : buildActivationWhatsAppMessage({
+              studentName: confirmingBooking.student.name,
+              bookingCode: confirmingBooking.code,
+              activationCode,
+              classLink: classLinkInput,
+              siteOrigin: window.location.origin,
+            });
+      const waHref = formatWhatsAppUrl(confirmingBooking.student.whatsapp, message);
+      setActionWhatsAppBanner({
+        title: autoActivated
+          ? 'تم تأكيد الحجز واشتراك الطالب اتفعّل تلقائياً على حسابه ✓'
+          : `تم تأكيد الحجز وإنشاء كود التفعيل ${activationCode}`,
+        waHref,
+      });
       setConfirmingBooking(null);
       setClassLinkInput('');
     } catch (err) {
@@ -285,6 +297,21 @@ export function AdminDashboardPage() {
       })
     );
     window.open(waHref, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleReleaseStale = async (stale: Booking[]) => {
+    if (stale.length === 0) return;
+    if (!window.confirm(`هيتم رفض ${stale.length} حجز معلّق من أكتر من 24 ساعة وتحرير مواعيدهم. متأكد؟`)) return;
+    let ok = 0;
+    for (const b of stale) {
+      try {
+        await rejectBookingAsAdmin(b, 'انتهت مهلة مراجعة التحويل. لو لسه عايز تحجز تواصل معانا أو احجز من جديد.');
+        ok += 1;
+      } catch {
+        /* continue with the rest */
+      }
+    }
+    showToast(`تم تحرير ${ok} من ${stale.length} حجز متأخر.`);
   };
 
   const handleIssueCode = async (booking: Booking) => {
@@ -529,6 +556,8 @@ export function AdminDashboardPage() {
             onSearchChange={setSearchQuery}
             onStatusFilterChange={setStatusFilter}
             onZoomReceipt={setZoomedReceiptUrl}
+            courses={courses}
+            onReleaseStale={handleReleaseStale}
             activationCodes={activationCodes}
             onIssueCode={handleIssueCode}
             onSendActivation={sendActivationWhatsApp}
@@ -583,7 +612,9 @@ export function AdminDashboardPage() {
               تأكيد حجز {confirmingBooking.student.name}
             </h3>
             <p className="rounded-xl bg-emerald-50 p-3 text-[11px] leading-relaxed text-emerald-900">
-              بعد التأكيد هيتعمل تلقائياً كود تفعيل للطالب وتبعتهوله على واتساب، والطالب يدخله من حسابه فيتفعّل اشتراكه وحصصه.
+              {confirmingBooking.studentUid
+                ? 'الطالب حجز وهو مسجّل دخول، فاشتراكه وحصصه هيتضافوا على حسابه تلقائياً بمجرد التأكيد، من غير كود.'
+                : 'الطالب حجز من غير تسجيل دخول، فهيتعمل له كود تفعيل تبعتهوله على واتساب وهو يدخله من حسابه.'}
             </p>
             <div>
               <label className="mb-1 block text-xs font-semibold">

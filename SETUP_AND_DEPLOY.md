@@ -24,7 +24,10 @@
    - **مهم جداً — الـ Index بتاع المواعيد:** من `Firestore Database > Indexes > Composite > Add index` أنشئ Index على Collection ID = `slots` بالحقول بالترتيب: `courseId` (Ascending) ثم `status` (Ascending) ثم `startAt` (Ascending). أو انشره بالأمر `firebase deploy --only firestore:indexes` (الملف `firestore.indexes.json` جاهز). من غيره بيتحول الموقع لاستعلام بديل بس بيفضل أبطأ.
    - فعّل **Firebase Storage** وانسخ محتوى `storage.rules` في `Storage > Rules` واضغط **Publish**.
 4. **تفعيل Firebase App Check (لمنع البوتات من تجميد المواعيد):**
-   - من `Firebase Console > App Check` اربط تطبيق الويب بـ **reCAPTCHA v3**، وضع الـ Site Key في `VITE_RECAPTCHA_SITE_KEY` داخل `.env` (وفي إعدادات Cloudflare Pages).
+   - أنشئ مفتاح **reCAPTCHA Enterprise** (نوع: Score-based) من [google.com/recaptcha/admin](https://www.google.com/recaptcha/admin)، داخل **نفس مشروع Google Cloud بتاع Firebase** (Project ID: `adham-english`)، وأضف النطاقات `adham-teach.online` و`adham-english.firebaseapp.com`.
+   - من `Firebase Console > App Check` سجّل تطبيق الويب واختار **reCAPTCHA Enterprise** وحط الـ Site Key. (لو ظهر طلب تفعيل reCAPTCHA Enterprise API اضغط تفعيل.)
+   - ضع الـ Site Key في `VITE_RECAPTCHA_SITE_KEY` داخل `.env` (وفي إعدادات Cloudflare Pages).
+   - راقب مقاييس الطلبات يومين أو تلاتة قبل الضغط على Enforce.
 5. **تقييد الـ API Key على دومينك فقط:**
    - من **Google Cloud Console > APIs & Services > Credentials**، افتح الـ Browser API Key وحدد **HTTP referrers**: `https://adham-teach.online/*` و`http://localhost:3000/*`.
 6. **تهيئة البيانات الأساسية والمحافظ:**

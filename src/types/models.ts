@@ -212,6 +212,8 @@ export interface Booking {
   status: BookingStatus;
   rejectionReason: string;
   classLink: string;
+  /** Set when the student was signed in while booking → subscription auto-activates on confirm */
+  studentUid?: string;
   createdAt: Timestamp | Date;
 }
 
