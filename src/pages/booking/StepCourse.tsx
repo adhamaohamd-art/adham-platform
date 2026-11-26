@@ -65,7 +65,11 @@ export function StepCourse({
                 </div>
                 <p className="mt-1.5 font-display text-base font-semibold text-[#14202B]">{title}</p>
                 <p className="mt-1 text-xs text-[#14202B]/65">
-                  {course.sessionDurationMinutes} {t('دقيقة', 'min')} · {getModeLabel(course.mode, lang)}
+                  {course.sessionDurationMinutes} {t('دقيقة', 'min')} ·{' '}
+                  {course.capacity > 1
+                    ? t(`مجموعة عامة (حتى ${course.capacity})`, `Group (up to ${course.capacity})`)
+                    : t('برايفت / خاص', 'Private')}{' '}
+                  · {getModeLabel(course.mode, lang)}
                 </p>
               </button>
             );

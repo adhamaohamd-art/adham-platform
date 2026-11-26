@@ -131,13 +131,19 @@ service cloud.firestore {
 
     function isValidSlot(data) {
       return data.keys().hasAll(['courseId', 'startAt', 'endAt', 'status'])
-        && data.keys().hasOnly(['courseId', 'startAt', 'endAt', 'status', 'bookingId'])
+        && data.keys().hasOnly([
+          'courseId', 'startAt', 'endAt', 'status', 'bookingId',
+          'capacity', 'bookedCount', 'bookingIds'
+        ])
         && isValidId(data.courseId)
         && data.startAt is timestamp
         && data.endAt is timestamp
         && data.endAt > data.startAt
         && data.status in ['available', 'pending', 'booked', 'closed']
-        && (!('bookingId' in data) || data.bookingId == null || (data.bookingId is string && isValidId(data.bookingId)));
+        && (!('bookingId' in data) || data.bookingId == null || (data.bookingId is string && isValidId(data.bookingId)))
+        && (!('capacity' in data) || (data.capacity is number && data.capacity >= 1 && data.capacity <= 100))
+        && (!('bookedCount' in data) || (data.bookedCount is number && data.bookedCount >= 0 && data.bookedCount <= 100))
+        && (!('bookingIds' in data) || (data.bookingIds is list && data.bookingIds.size() <= 100));
     }
 
     function isValidStudentMap(student) {
@@ -332,14 +338,33 @@ service cloud.firestore {
       allow update: if isValidId(slotId) && isValidSlot(incoming()) && (
         isAdmin() || (
           existing().status == 'available'
-          && incoming().status == 'pending'
           && incoming().courseId == existing().courseId
           && incoming().startAt == existing().startAt
           && incoming().endAt == existing().endAt
-          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'bookingId'])
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status', 'bookingId', 'bookedCount', 'capacity', 'bookingIds'
+          ])
           && incoming().bookingId is string
           && isValidId(incoming().bookingId)
           && existsAfter(/databases/$(database)/documents/bookings/$(incoming().bookingId))
+          && (
+            (
+              (!('capacity' in existing()) || existing().capacity <= 1)
+              && (!('capacity' in incoming()) || incoming().capacity == 1)
+              && incoming().status == 'pending'
+              && (!('bookedCount' in incoming()) || incoming().bookedCount == 1)
+            )
+            || (
+              ('capacity' in existing()) && existing().capacity > 1
+              && incoming().capacity == existing().capacity
+              && incoming().bookedCount == (('bookedCount' in existing() ? existing().bookedCount : 0) + 1)
+              && incoming().bookedCount <= existing().capacity
+              && (
+                (incoming().bookedCount < existing().capacity && incoming().status == 'available')
+                || (incoming().bookedCount == existing().capacity && incoming().status == 'pending')
+              )
+            )
+          )
         )
       );
       allow delete: if isValidId(slotId) && isAdmin();

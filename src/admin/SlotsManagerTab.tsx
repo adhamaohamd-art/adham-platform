@@ -70,6 +70,19 @@ export function SlotsManagerTab({
   const [busy, setBusy] = useState(false);
 
   const activeCourseId = courseId || courses[0]?.id || '';
+  const activeCourse = useMemo(
+    () => courses.find((c) => c.id === activeCourseId) ?? courses[0] ?? null,
+    [courses, activeCourseId]
+  );
+  const activeCapacity = Math.max(1, activeCourse?.capacity ?? 1);
+
+  const handleCourseChange = (nextId: string) => {
+    setCourseId(nextId);
+    const found = courses.find((c) => c.id === nextId);
+    if (found && [45, 60, 90, 120].includes(found.sessionDurationMinutes)) {
+      setDuration(found.sessionDurationMinutes);
+    }
+  };
 
   const bookingById = useMemo(() => {
     const map = new Map<string, Booking>();
@@ -121,7 +134,7 @@ export function SlotsManagerTab({
   // What visitors can actually book right now (same window the booking page uses: next 29 days)
   const visitorOpenCount = useMemo(() => {
     const nowMs = Date.now();
-    const maxMs = nowMs + 29 * DAY_MS;
+    const maxMs = nowMs + 42 * DAY_MS;
     return slots.filter((s) => {
       if (s.courseId !== activeCourseId || s.status !== 'available') return false;
       const t = toDate(s.startAt).getTime();
@@ -144,6 +157,9 @@ export function SlotsManagerTab({
               endAt: Timestamp.fromDate(new Date(start.getTime() + duration * 60 * 1000)),
               status: 'available',
               bookingId: null,
+              capacity: activeCapacity,
+              bookedCount: 0,
+              bookingIds: [],
             });
           } else {
             batch.update(doc(db, 'slots', op.id), { status: op.status });
@@ -264,7 +280,7 @@ export function SlotsManagerTab({
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1 block text-xs font-semibold">الصف</label>
-            <select value={activeCourseId} onChange={(e) => setCourseId(e.target.value)} className={selectCls}>
+            <select value={activeCourseId} onChange={(e) => handleCourseChange(e.target.value)} className={selectCls}>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.title}
@@ -318,8 +334,8 @@ export function SlotsManagerTab({
           }`}
         >
           {visitorOpenCount > 0
-            ? `ظاهر للزوار دلوقتي: ${visitorOpenCount} ميعاد متاح خلال الـ 29 يوم الجايين`
-            : 'مفيش أي ميعاد متاح للزوار في الـ 29 يوم الجايين — افتح مواعيد أو كرر الأسبوع.'}
+            ? `ظاهر للزوار دلوقتي: ${visitorOpenCount} ميعاد متاح خلال الـ 42 يوم الجايين`
+            : 'مفيش أي ميعاد متاح للزوار في الـ 42 يوم الجايين — افتح مواعيد أو كرر الأسبوع.'}
         </p>
       </div>
 
@@ -406,6 +422,8 @@ export function SlotsManagerTab({
                       );
                     }
                     const student = slot.bookingId ? bookingById.get(slot.bookingId)?.student.name : undefined;
+                    const cap = slot.capacity ?? activeCapacity;
+                    const booked = slot.bookedCount ?? (slot.status === 'booked' || slot.status === 'pending' ? 1 : 0);
                     return (
                       <button
                         key={d.key}
@@ -415,7 +433,13 @@ export function SlotsManagerTab({
                         className={`flex min-h-[52px] flex-col items-center justify-center rounded-xl border-2 px-1 py-1 text-[11px] font-bold transition ${cellStyle[slot.status]}`}
                       >
                         <span>{cellLabel[slot.status]}</span>
-                        {student && <span className="max-w-full truncate text-[10px] font-medium">{student}</span>}
+                        {cap > 1 ? (
+                          <span className="text-[10px] font-medium tabular-nums">
+                            {booked}/{cap} طالب
+                          </span>
+                        ) : (
+                          student && <span className="max-w-full truncate text-[10px] font-medium">{student}</span>
+                        )}
                       </button>
                     );
                   })}

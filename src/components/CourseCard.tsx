@@ -31,7 +31,7 @@ export function CourseCard({ course, index }: { course: Course; index: number })
         : t('باقات مرنة', 'Flexible Packages');
 
   return (
-    <article className="group relative flex h-full flex-col justify-between overflow-hidden rounded-[20px] bg-white p-6 text-[#14202B] card-shadow transition-all duration-300 hover:-translate-y-1.5 hover:card-shadow-hover sm:p-7">
+    <article className="group relative flex h-full flex-col justify-between overflow-hidden rounded-[20px] bg-white p-5 text-[#14202B] card-shadow transition-all duration-300 hover:-translate-y-1.5 hover:card-shadow-hover sm:p-7">
       <span
         className="pointer-events-none absolute -top-8 -start-8 h-24 w-24 rounded-full bg-[#FEEADD]/75 transition-transform duration-300 group-hover:scale-110"
         aria-hidden="true"
@@ -52,13 +52,24 @@ export function CourseCard({ course, index }: { course: Course; index: number })
           <span className="text-[#14202B]/65 font-medium">
             {course.sessionDurationMinutes} {t('دقيقة', 'min')}
           </span>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+              course.capacity > 1
+                ? 'bg-[#187B97]/10 text-[#187B97]'
+                : 'bg-[#FEEADD] text-[#14202B]'
+            }`}
+          >
+            {course.capacity > 1
+              ? t(`مجموعة (حتى ${course.capacity})`, `Group (up to ${course.capacity})`)
+              : t('برايفت / خاص', 'Private')}
+          </span>
         </div>
 
-        <h3 className="mt-2.5 font-display text-xl font-semibold leading-snug text-[#14202B]">
+        <h3 className="mt-2.5 font-display text-lg font-semibold leading-snug text-[#14202B] sm:text-xl">
           {title}
         </h3>
 
-        <p className="mt-2.5 text-[15px] leading-relaxed text-[#14202B]/75">{description}</p>
+        <p className="mt-2.5 text-sm leading-relaxed text-[#14202B]/75 sm:text-[15px]">{description}</p>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-[#14202B]/10 pt-3.5 text-xs font-medium text-[#267688]">
           <span>{getModeLabel(course.mode, lang)}</span>
@@ -71,13 +82,13 @@ export function CourseCard({ course, index }: { course: Course; index: number })
         {/* Dynamic Pricing Lines */}
         <div className="mt-4 space-y-1.5 text-sm">
           {activePackages.slice(0, 4).map((pkg, idx) => (
-            <div key={pkg.id} className="flex items-center justify-between gap-3">
-              <span className="text-[#14202B]/70">
+            <div key={pkg.id} className="flex items-start justify-between gap-3">
+              <span className="min-w-0 flex-1 text-[13px] leading-snug text-[#14202B]/70 sm:text-sm">
                 {getPackageDisplayName(pkg, lang)} ({pkg.sessionsCount}{' '}
                 {pkg.sessionsCount === 1 ? t('حصة', 'session') : t('حصص', 'sessions')}):
               </span>
               <span
-                className={`font-display font-semibold tabular-nums ${
+                className={`shrink-0 whitespace-nowrap font-display font-semibold tabular-nums ${
                   idx === 0 ? 'text-[#14202B]' : 'text-[#187B97]'
                 }`}
               >
@@ -102,7 +113,7 @@ export function CourseCard({ course, index }: { course: Course; index: number })
         </Link>
 
         <div className="-mb-3 -me-2 shrink-0">
-          <CourseCornerIllustration variant={illustration} className="h-20 w-20" />
+          <CourseCornerIllustration variant={illustration} className="h-16 w-16 sm:h-20 sm:w-20" />
         </div>
       </div>
     </article>

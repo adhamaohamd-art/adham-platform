@@ -5,6 +5,8 @@ import {
   buildLookupDocId,
   buildSlotId,
   extractVideoEmbed,
+  extractYouTubeThumbnail,
+  isPortraitVideoUrl,
   findWeeklyMatchingSlots,
   formatWhatsAppUrl,
   generateBookingCode,
@@ -166,6 +168,25 @@ test('Video embed parser strictly allowlists YouTube, Google Drive, and HTTPS MP
   assert.equal(extractVideoEmbed('https://untrusted-site.com/embed'), null);
   assert.equal(extractVideoEmbed('javascript:alert(1)'), null);
   assert.equal(extractVideoEmbed(''), null);
+  // Shorts, params in any order, mobile host, Drive open?id= links
+  assert.equal(
+    extractVideoEmbed('https://youtube.com/shorts/dQw4w9WgXcQ?feature=share')?.src,
+    'https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0'
+  );
+  assert.equal(
+    extractVideoEmbed('https://m.youtube.com/watch?feature=share&v=dQw4w9WgXcQ')?.src,
+    'https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0'
+  );
+  assert.equal(
+    extractVideoEmbed('https://drive.google.com/open?id=1AbC_dEf123')?.src,
+    'https://drive.google.com/file/d/1AbC_dEf123/preview'
+  );
+  assert.equal(isPortraitVideoUrl('https://youtube.com/shorts/dQw4w9WgXcQ'), true);
+  assert.equal(isPortraitVideoUrl('https://youtu.be/dQw4w9WgXcQ'), false);
+  assert.equal(
+    extractYouTubeThumbnail('https://youtu.be/dQw4w9WgXcQ'),
+    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'
+  );
 });
 
 import { getCourseGradeOptions } from '../data/grades';

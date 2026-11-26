@@ -311,6 +311,28 @@ export function findWeeklyMatchingSlots(
   return picked;
 }
 
+export function getSlotCapacity(slot: Pick<Slot, 'capacity'>, fallbackCapacity = 1): number {
+  const cap = slot.capacity ?? fallbackCapacity;
+  return Number.isFinite(cap) && cap >= 1 ? Math.floor(cap) : 1;
+}
+
+export function getSlotBookedCount(slot: Pick<Slot, 'bookedCount' | 'status'>): number {
+  if (typeof slot.bookedCount === 'number' && Number.isFinite(slot.bookedCount)) {
+    return Math.max(0, Math.floor(slot.bookedCount));
+  }
+  return slot.status === 'booked' || slot.status === 'pending' ? 1 : 0;
+}
+
+export function getSlotRemainingSeats(
+  slot: Pick<Slot, 'capacity' | 'bookedCount' | 'status'>,
+  fallbackCapacity = 1
+): number {
+  if (slot.status === 'closed') return 0;
+  const cap = getSlotCapacity(slot, fallbackCapacity);
+  const booked = getSlotBookedCount(slot);
+  return Math.max(0, cap - booked);
+}
+
 export interface WeeklyTemplateConfig {
   courseId: string;
   daysOfWeek: number[]; // 0 = Sun ... 6 = Sat
@@ -320,6 +342,7 @@ export interface WeeklyTemplateConfig {
   endMinute: number;
   durationMinutes: number;
   weeksAhead: number;
+  capacity?: number;
   fromDate?: Date;
 }
 
@@ -330,6 +353,9 @@ export interface GeneratedSlotDraft {
   endAt: Date;
   status: 'available';
   bookingId: null;
+  capacity: number;
+  bookedCount: number;
+  bookingIds: string[];
 }
 
 export function generateWeeklySlotsRange(
@@ -370,6 +396,9 @@ export function generateWeeklySlotsRange(
         endAt: slotEnd,
         status: 'available',
         bookingId: null,
+        capacity: Math.max(1, config.capacity ?? 1),
+        bookedCount: 0,
+        bookingIds: [],
       });
     }
   }
@@ -431,24 +460,62 @@ export function generateIcsContent(params: {
   return lines.join('\r\n');
 }
 
+const YT_ID = /^[a-zA-Z0-9_-]{11}$/;
+
+/** Pulls the 11-char YouTube video id out of watch / youtu.be / embed / shorts / live URLs. */
+function parseYouTubeId(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^(www\.|m\.|music\.)/, '');
+  if (host === 'youtu.be') {
+    const id = u.pathname.split('/').filter(Boolean)[0] ?? '';
+    return YT_ID.test(id) ? id : null;
+  }
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    const v = u.searchParams.get('v');
+    if (v && YT_ID.test(v)) return v;
+    const parts = u.pathname.split('/').filter(Boolean);
+    if (['embed', 'shorts', 'live', 'v'].includes(parts[0] ?? '') && YT_ID.test(parts[1] ?? '')) {
+      return parts[1];
+    }
+  }
+  return null;
+}
+
+function parseDriveId(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (u.hostname !== 'drive.google.com') return null;
+  const m = u.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  const id = u.searchParams.get('id');
+  return id && /^[a-zA-Z0-9_-]+$/.test(id) ? id : null;
+}
+
 /**
  * Strict allowlist video embed parser (YouTube, Google Drive, or HTTPS MP4/WebM/OGG).
  * Arbitrary third-party iframe URLs are intentionally blocked for security.
  */
 export function extractVideoEmbed(url: string): { kind: 'iframe' | 'video'; src: string } | null {
-  const trimmed = url.trim();
+  const trimmed = (url || '').trim();
   if (!isSafeHttpsUrl(trimmed)) return null;
 
-  const ytMatch = trimmed.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
-  );
-  if (ytMatch) {
-    return { kind: 'iframe', src: `https://www.youtube.com/embed/${ytMatch[1]}?rel=0` };
+  const ytId = parseYouTubeId(trimmed);
+  if (ytId) {
+    return { kind: 'iframe', src: `https://www.youtube.com/embed/${ytId}?rel=0` };
   }
 
-  const driveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (driveMatch) {
-    return { kind: 'iframe', src: `https://drive.google.com/file/d/${driveMatch[1]}/preview` };
+  const driveId = parseDriveId(trimmed);
+  if (driveId) {
+    return { kind: 'iframe', src: `https://drive.google.com/file/d/${driveId}/preview` };
   }
 
   if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(trimmed)) {
@@ -456,6 +523,11 @@ export function extractVideoEmbed(url: string): { kind: 'iframe' | 'video'; src:
   }
 
   return null;
+}
+
+/** True for vertical videos (YouTube Shorts) so the player can use a 9:16 frame. */
+export function isPortraitVideoUrl(url: string): boolean {
+  return /youtube\.com\/shorts\//i.test((url || '').trim());
 }
 
 /**
@@ -520,10 +592,110 @@ export function getModeLabel(mode: 'online' | 'offline' | 'both', lang: Language
 }
 
 export function extractYouTubeThumbnail(url: string): string | null {
-  const trimmed = (url || '').trim();
-  const ytMatch = trimmed.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
+  const id = parseYouTubeId((url || '').trim());
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null;
+}
+
+export interface GroupCohort {
+  id: string;
+  daysLabelAr: string;
+  daysLabelEn: string;
+  timeLabelAr: string;
+  timeLabelEn: string;
+  /** Consecutive slots selected for this cohort (up to requiredSessions) */
+  slots: Slot[];
+  totalAvailableSlots: number;
+  minRemainingSeats: number;
+}
+
+const WEEKDAY_PAIR_MAP: Record<string, { pairId: string; ar: string; en: string }> = {
+  Sat: { pairId: 'sat_tue', ar: 'السبت', en: 'Sat' },
+  Tue: { pairId: 'sat_tue', ar: 'الثلاثاء', en: 'Tue' },
+  Sun: { pairId: 'sun_wed', ar: 'الأحد', en: 'Sun' },
+  Wed: { pairId: 'sun_wed', ar: 'الأربعاء', en: 'Wed' },
+  Mon: { pairId: 'mon_thu', ar: 'الاثنين', en: 'Mon' },
+  Thu: { pairId: 'mon_thu', ar: 'الخميس', en: 'Thu' },
+  Fri: { pairId: 'fri', ar: 'الجمعة', en: 'Fri' },
+};
+
+const PAIR_LABELS: Record<string, { ar: string; en: string }> = {
+  sat_tue: { ar: 'السبت والثلاثاء', en: 'Sat & Tue' },
+  sun_wed: { ar: 'الأحد والأربعاء', en: 'Sun & Wed' },
+  mon_thu: { ar: 'الاثنين والخميس', en: 'Mon & Thu' },
+  fri: { ar: 'الجمعة', en: 'Friday' },
+};
+
+/**
+ * Groups available slots of a fixed-schedule Group Course into cohorts
+ * (e.g., "Sat & Tue — 4:30 PM", "Sat & Tue — 7:00 PM") so students pick a whole
+ * fixed group track rather than cherry-picking individual days.
+ */
+export function buildGroupCohorts(
+  availableSlots: Slot[],
+  requiredSessions: number,
+  courseCapacity = 15
+): GroupCohort[] {
+  const buckets = new Map<
+    string,
+    { pairId: string; weekdays: Set<string>; slots: Slot[] }
+  >();
+
+  for (const slot of availableSlots) {
+    if (slot.status !== 'available') continue;
+    const start = toDate(slot.startAt);
+    const wd = new Intl.DateTimeFormat('en-US', {
+      timeZone: CAIRO_TIMEZONE,
+      weekday: 'short',
+    }).format(start);
+    const parts = getCairoParts(start);
+    const info = WEEKDAY_PAIR_MAP[wd] ?? { pairId: wd.toLowerCase(), ar: wd, en: wd };
+    const key = `${info.pairId}_${parts.hour}:${parts.minute}`;
+    const existing = buckets.get(key) ?? {
+      pairId: info.pairId,
+      weekdays: new Set<string>(),
+      slots: [],
+    };
+    existing.weekdays.add(wd);
+    existing.slots.push(slot);
+    buckets.set(key, existing);
+  }
+
+  const cohorts: GroupCohort[] = [];
+  buckets.forEach((bucket, id) => {
+    const sorted = [...bucket.slots].sort(
+      (a, b) => toDate(a.startAt).getTime() - toDate(b.startAt).getTime()
+    );
+    if (sorted.length === 0) return;
+
+    const firstDate = toDate(sorted[0].startAt);
+    const picked = sorted.slice(0, Math.max(1, requiredSessions));
+    const minRemainingSeats = picked.reduce(
+      (min, s) => Math.min(min, getSlotRemainingSeats(s, courseCapacity)),
+      courseCapacity
+    );
+
+    let daysLabelAr = PAIR_LABELS[bucket.pairId]?.ar ?? '';
+    let daysLabelEn = PAIR_LABELS[bucket.pairId]?.en ?? '';
+    if (bucket.weekdays.size === 1) {
+      const onlyWd = [...bucket.weekdays][0];
+      const single = WEEKDAY_PAIR_MAP[onlyWd];
+      daysLabelAr = single ? `${single.ar} أسبوعياً` : onlyWd;
+      daysLabelEn = single ? `Every ${single.en}` : onlyWd;
+    }
+
+    cohorts.push({
+      id,
+      daysLabelAr,
+      daysLabelEn,
+      timeLabelAr: formatSlotTimeLabel(firstDate, 'ar'),
+      timeLabelEn: formatSlotTimeLabel(firstDate, 'en'),
+      slots: picked,
+      totalAvailableSlots: sorted.length,
+      minRemainingSeats,
+    });
+  });
+
+  return cohorts.sort(
+    (a, b) => toDate(a.slots[0].startAt).getTime() - toDate(b.slots[0].startAt).getTime()
   );
-  if (!ytMatch) return null;
-  return `https://i.ytimg.com/vi/${ytMatch[1]}/hqdefault.jpg`;
 }

@@ -260,9 +260,9 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="mt-10 flex gap-6 overflow-x-auto pb-3 md:grid md:grid-cols-3 md:overflow-visible">
+            <div className="mt-10 grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-3">
               {featuredCourses.map((course, idx) => (
-                <div key={course.id} className="min-w-[295px] shrink-0 md:min-w-0">
+                <div key={course.id} className="min-w-0">
                   <CourseCard course={course} index={idx} />
                 </div>
               ))}

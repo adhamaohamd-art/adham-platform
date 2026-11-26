@@ -13,7 +13,7 @@ export function VideosLibraryPage() {
   const [videos, setVideos] = useState<VideoLesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'demo' | 'reel'>('all');
-  const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
+  const [activeVideo, setActiveVideo] = useState<{ url: string; portrait: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +127,7 @@ export function VideosLibraryPage() {
                         <button
                           key={v.id}
                           type="button"
-                          onClick={() => setActiveVideoUrl(v.url)}
+                          onClick={() => setActiveVideo({ url: v.url, portrait: false })}
                           className="group overflow-hidden rounded-[22px] bg-[#F6ECE1] text-start text-[#14202B] card-shadow transition hover:-translate-y-1"
                         >
                           <div className="relative aspect-video w-full overflow-hidden bg-[#14202B]">
@@ -142,7 +142,7 @@ export function VideosLibraryPage() {
                               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#187B97] to-[#14202B]" />
                             )}
                             <span className="absolute inset-0 flex items-center justify-center bg-[#14202B]/30 transition group-hover:bg-[#14202B]/15">
-                              <span className="flex h-13 w-13 items-center justify-center rounded-full bg-[#EFB9A0] text-[#14202B] shadow-lg transition group-hover:scale-110">
+                              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#EFB9A0] text-[#14202B] shadow-lg transition group-hover:scale-110">
                                 <Play className="h-5 w-5 fill-current" />
                               </span>
                             </span>
@@ -182,7 +182,7 @@ export function VideosLibraryPage() {
                         <button
                           key={v.id}
                           type="button"
-                          onClick={() => setActiveVideoUrl(v.url)}
+                          onClick={() => setActiveVideo({ url: v.url, portrait: true })}
                           className="group relative overflow-hidden rounded-[22px] bg-[#14202B] text-start text-white card-shadow transition hover:-translate-y-1"
                         >
                           <div className="relative aspect-[9/14] w-full overflow-hidden">
@@ -226,9 +226,10 @@ export function VideosLibraryPage() {
       </section>
 
       <VideoModal
-        open={Boolean(activeVideoUrl)}
-        onClose={() => setActiveVideoUrl(null)}
-        videoUrl={activeVideoUrl || ''}
+        open={Boolean(activeVideo)}
+        onClose={() => setActiveVideo(null)}
+        videoUrl={activeVideo?.url || ''}
+        portrait={activeVideo?.portrait}
       />
     </PageFrame>
   );

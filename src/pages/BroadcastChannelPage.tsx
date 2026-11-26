@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  startAfter,
+  type QueryDocumentSnapshot,
+} from 'firebase/firestore';
 import { BookOpen, Megaphone, Sparkles } from 'lucide-react';
 import { PageFrame } from '../components/PageFrame';
 import { useLanguage } from '../hooks/useLanguage';
@@ -13,40 +21,78 @@ const CATEGORY_META = {
   announcement: { ar: 'تنبيه عام', en: 'Announcement', color: 'bg-amber-50 text-amber-800' },
 };
 
+const PAGE_SIZE = 5;
+
 export function BroadcastChannelPage() {
   const { lang, t } = useLanguage();
   const [posts, setPosts] = useState<BroadcastPost[]>([]);
-  const [maxItems, setMaxItems] = useState(20);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<'all' | 'grammar' | 'vocab' | 'announcement'>('all');
+
+  // Reads PAGE_SIZE + 1 docs: the extra one only tells us whether another page exists,
+  // so "Load more" disappears exactly when the channel has no older posts.
+  const fetchPage = async (after: QueryDocumentSnapshot | null) => {
+    const col = collection(db, 'broadcasts');
+    const q = after
+      ? query(col, orderBy('createdAt', 'desc'), startAfter(after), limit(PAGE_SIZE + 1))
+      : query(col, orderBy('createdAt', 'desc'), limit(PAGE_SIZE + 1));
+    const snap = await getDocs(q);
+    const pageDocs = snap.docs.slice(0, PAGE_SIZE);
+    return {
+      items: pageDocs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<BroadcastPost, 'id'>),
+      })) as BroadcastPost[],
+      last: pageDocs.length > 0 ? pageDocs[pageDocs.length - 1] : null,
+      more: snap.docs.length > PAGE_SIZE,
+    };
+  };
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void getDocs(
-      query(collection(db, 'broadcasts'), orderBy('createdAt', 'desc'), limit(maxItems))
-    )
-      .then((snap) => {
-        if (!cancelled) {
-          setPosts(
-            snap.docs.map((d) => ({
-              id: d.id,
-              ...(d.data() as Omit<BroadcastPost, 'id'>),
-            }))
-          );
-        }
+    fetchPage(null)
+      .then((res) => {
+        if (cancelled) return;
+        setPosts(res.items);
+        setLastDoc(res.last);
+        setHasMore(res.more);
       })
       .catch(() => {
-        if (!cancelled) setPosts([]);
+        if (!cancelled) {
+          setPosts([]);
+          setHasMore(false);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [maxItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || !lastDoc) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetchPage(lastDoc);
+      setPosts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...res.items.filter((p) => !seen.has(p.id))];
+      });
+      setLastDoc(res.last ?? lastDoc);
+      setHasMore(res.more);
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const filtered = filter === 'all' ? posts : posts.filter((p) => p.category === filter);
 
@@ -100,7 +146,7 @@ export function BroadcastChannelPage() {
               {t('جاري تحميل منشورات القناة...', 'Loading channel posts...')}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-[26px] bg-[#F6ECE1] p-10 text-center text-[#14202B] card-shadow">
+            <div className="rounded-[26px] bg-[#F6ECE1] p-8 text-center text-[#14202B] card-shadow sm:p-10">
               <Sparkles className="mx-auto h-8 w-8 text-[#187B97]" />
               <p className="mt-3 font-display text-lg font-semibold">
                 {t('لا توجد منشورات بعد في هذا القسم', 'No posts yet in this category')}
@@ -108,6 +154,16 @@ export function BroadcastChannelPage() {
               <p className="mt-1 text-xs text-[#14202B]/70">
                 {t('تابع القناة باستمرار لأحدث ملاحظات مستر أدهم.', 'Check back soon for Mr. Adham’s latest notes.')}
               </p>
+              {hasMore && (
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="mt-4 min-h-[42px] rounded-full bg-[#EFB9A0] px-6 py-2 text-xs font-bold text-[#14202B] disabled:opacity-60"
+                >
+                  {loadingMore ? t('جاري التحميل...', 'Loading...') : t('عرض المزيد', 'Show more')}
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -116,7 +172,7 @@ export function BroadcastChannelPage() {
                 return (
                   <article
                     key={post.id}
-                    className="rounded-[24px] bg-[#F6ECE1] p-6 text-[#14202B] card-shadow"
+                    className="rounded-[24px] bg-[#F6ECE1] p-5 text-[#14202B] card-shadow sm:p-6"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${meta.color}`}>
@@ -132,21 +188,22 @@ export function BroadcastChannelPage() {
                       <BookOpen className="h-4 w-4 shrink-0 text-[#187B97]" />
                       <span>{post.title}</span>
                     </h2>
-                    <p className="mt-2 whitespace-pre-line text-sm leading-[1.85] text-[#14202B]/85">
+                    <p className="mt-2 whitespace-pre-line break-words text-sm leading-[1.85] text-[#14202B]/85">
                       {post.body}
                     </p>
                   </article>
                 );
               })}
 
-              {posts.length >= maxItems && (
+              {hasMore && (
                 <div className="flex justify-center pt-2">
                   <button
                     type="button"
-                    onClick={() => setMaxItems((prev) => prev + 20)}
-                    className="min-h-[42px] rounded-full bg-white px-6 py-2 text-xs font-bold text-[#14202B] shadow-sm hover:bg-[#FEEADD]"
+                    onClick={() => void loadMore()}
+                    disabled={loadingMore}
+                    className="min-h-[44px] rounded-full bg-white px-7 py-2 text-xs font-bold text-[#14202B] shadow-sm hover:bg-[#FEEADD] disabled:opacity-60"
                   >
-                    {t('تحميل المزيد', 'Load More')}
+                    {loadingMore ? t('جاري التحميل...', 'Loading...') : t('عرض المزيد', 'Show more')}
                   </button>
                 </div>
               )}

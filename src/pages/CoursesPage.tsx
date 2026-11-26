@@ -6,21 +6,23 @@ import { Reveal } from '../components/MotionPrimitives';
 import { useLanguage } from '../hooks/useLanguage';
 import { useSiteData } from '../hooks/useSiteData';
 
-type ModeFilter = 'all' | 'online' | 'offline';
+type TrackFilter = 'all' | 'group' | 'private' | 'online' | 'offline';
 
 export function CoursesPage() {
   const { lang, t } = useLanguage();
   const { courses, settings, loading } = useSiteData();
-  const [filter, setFilter] = useState<ModeFilter>('all');
+  const [filter, setFilter] = useState<TrackFilter>('all');
 
   const filtered = useMemo(() => {
     if (filter === 'all') return courses;
+    if (filter === 'group') return courses.filter((c) => c.capacity > 1);
+    if (filter === 'private') return courses.filter((c) => c.capacity <= 1);
     return courses.filter((c) => c.mode === filter || c.mode === 'both');
   }, [courses, filter]);
 
   return (
     <PageFrame>
-      <section className="px-6 pt-10 pb-20 text-white sm:px-10">
+      <section className="px-4 pt-10 pb-20 text-white sm:px-10">
         <div className="mx-auto max-w-6xl">
           <Reveal>
             <div className="grid grid-cols-1 items-end gap-6 lg:grid-cols-12">
@@ -51,20 +53,22 @@ export function CoursesPage() {
             <div
               role="group"
               aria-label={t('تصفية حسب نظام الحضور', 'Filter by class mode')}
-              className="inline-flex items-center gap-1.5 rounded-full bg-white/15 p-1.5 backdrop-blur-xs"
+              className="flex w-full flex-wrap items-center justify-center gap-1.5 rounded-[24px] bg-white/15 p-1.5 sm:inline-flex sm:w-auto sm:rounded-full"
             >
               {(
                 [
-                  { id: 'all', label: t('كل الصفوف', 'All Courses') },
-                  { id: 'online', label: t('أونلاين (Zoom / Meet)', 'Online') },
-                  { id: 'offline', label: t('أوفلاين (سنتر / برايفت)', 'Offline') },
+                  { id: 'all', label: t('الكل', 'All') },
+                  { id: 'group', label: t('المجاميع العامة', 'Group Classes') },
+                  { id: 'private', label: t('البرايفت والخاص', 'Private & Semi-Private') },
+                  { id: 'online', label: t('أونلاين', 'Online') },
+                  { id: 'offline', label: t('أوفلاين', 'Offline') },
                 ] as const
               ).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setFilter(tab.id)}
-                  className={`min-h-[40px] whitespace-nowrap rounded-full px-5 py-2 text-xs font-semibold transition ${
+                  className={`min-h-[40px] rounded-full px-4 py-2 text-xs font-semibold transition sm:px-5 ${
                     filter === tab.id
                       ? 'bg-white text-[#14202B] shadow-xs'
                       : 'text-white/90 hover:bg-white/10'
@@ -83,7 +87,7 @@ export function CoursesPage() {
             </Link>
           </div>
 
-          {/* Courses Grid (desktop) / Swipe Row (mobile) */}
+          {/* Courses Grid: single column on phones, 2-3 columns on larger screens */}
           {loading ? (
             <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {[0, 1, 2, 3, 4].map((n) => (
@@ -104,9 +108,9 @@ export function CoursesPage() {
               </button>
             </div>
           ) : (
-            <div className="mt-10 flex gap-6 overflow-x-auto pb-4 md:grid md:grid-cols-2 md:overflow-visible lg:grid-cols-3">
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:mt-10 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filtered.map((course, idx) => (
-                <div key={course.id} className="min-w-[300px] shrink-0 md:min-w-0">
+                <div key={course.id} className="min-w-0">
                   <CourseCard course={course} index={idx} />
                 </div>
               ))}

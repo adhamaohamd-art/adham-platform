@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { Edit3, Plus, Trash2 } from 'lucide-react';
+import { Edit3, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { applyStructuredCatalogAsAdmin } from '../lib/bookingService';
 import { getCoursePackages } from '../lib/helpers';
 import {
   ALL_STANDARD_GRADES,
@@ -53,6 +54,27 @@ export function CoursesManagerTab({
   const [form, setForm] = useState<Omit<Course, 'id'>>(EMPTY_COURSE);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [applyingCatalog, setApplyingCatalog] = useState(false);
+
+  const handleApplyStructuredCatalog = async () => {
+    if (
+      !window.confirm(
+        'سيتم إضافة/تحديث الـ 8 صفوف المنظمة (6 مجاميع عامة من أولى إعدادي لتالتة ثانوي + 2 برايفت) وإنشاء مواعيدهم لمدة 4 أسابيع بدون حذف أي حجوزات حالية. متابعة؟'
+      )
+    ) {
+      return;
+    }
+    setApplyingCatalog(true);
+    try {
+      const res = await applyStructuredCatalogAsAdmin();
+      clearSiteDataCache();
+      onToast(`تم تطبيق الكتالوج بنجاح: ${res.coursesUpserted} صفوف و ${res.slotsCreated} ميعاد جديد.`);
+    } catch (err) {
+      onToast((err as Error).message);
+    } finally {
+      setApplyingCatalog(false);
+    }
+  };
 
   const openNew = () => {
     setEditingId(null);
@@ -263,14 +285,25 @@ export function CoursesManagerTab({
             أنشئ أي عدد من الباقات وعدّل أسماءها وعدد حصصها وأسعارها بحرية كاملة.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openNew}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[#EFB9A0] px-6 py-2 font-display text-sm font-bold text-[#14202B] shadow-xs hover:bg-[#FEEADD]"
-        >
-          <Plus className="h-4 w-4" />
-          <span>إضافة صف / كورس</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={applyingCatalog}
+            onClick={() => void handleApplyStructuredCatalog()}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[#187B97] px-5 py-2 font-display text-xs font-bold text-white shadow-xs hover:bg-[#267688] disabled:opacity-60"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>{applyingCatalog ? 'جاري التطبيق...' : 'تطبيق جدول وباقات الإعدادي والثانوي'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={openNew}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-[#EFB9A0] px-6 py-2 font-display text-sm font-bold text-[#14202B] shadow-xs hover:bg-[#FEEADD]"
+          >
+            <Plus className="h-4 w-4" />
+            <span>إضافة صف / كورس</span>
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -595,7 +628,18 @@ export function CoursesManagerTab({
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <span className="text-xs font-semibold text-[#187B97]">{course.tag}</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-semibold text-[#187B97]">{course.tag}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          course.capacity > 1
+                            ? 'bg-[#187B97]/10 text-[#187B97]'
+                            : 'bg-[#FEEADD] text-[#14202B]'
+                        }`}
+                      >
+                        {course.capacity > 1 ? `مجموعة عامة (حتى ${course.capacity} طالب)` : 'برايفت / خاص'}
+                      </span>
+                    </div>
                     <h3 className="mt-1 font-display text-lg font-semibold text-[#14202B]">
                       {course.title}
                     </h3>

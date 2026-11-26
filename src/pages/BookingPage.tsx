@@ -11,6 +11,7 @@ import { useAdminAuth } from '../hooks/useAdminAuth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
+  buildGroupCohorts,
   EGYPT_PHONE_REGEX,
   findWeeklyMatchingSlots,
   formatPriceEGP,
@@ -203,10 +204,45 @@ export function BookingPage() {
   }, [selectedCourse, gradeOptions, getValues, setValue]);
 
   const requiredSessions = selectedPackage?.sessionsCount ?? 1;
+  const isGroupCourse = (selectedCourse?.capacity ?? 1) > 1;
+  const [selectedCohortId, setSelectedCohortId] = useState<string>('');
 
+  const groupCohorts = useMemo(
+    () =>
+      isGroupCourse
+        ? buildGroupCohorts(courseSlots, requiredSessions, selectedCourse?.capacity ?? 15)
+        : [],
+    [isGroupCourse, courseSlots, requiredSessions, selectedCourse?.capacity]
+  );
+
+  // For fixed-schedule Group Courses, auto-select a whole cohort (all consecutive sessions)
   useEffect(() => {
-    setSelectedSlotIds((prev) => prev.slice(0, requiredSessions));
-  }, [requiredSessions]);
+    if (!isGroupCourse) {
+      setSelectedCohortId('');
+      setSelectedSlotIds((prev) => prev.slice(0, requiredSessions));
+      return;
+    }
+    if (groupCohorts.length === 0) {
+      setSelectedCohortId('');
+      setSelectedSlotIds([]);
+      return;
+    }
+    const current = groupCohorts.find((c) => c.id === selectedCohortId);
+    const chosen =
+      current ??
+      groupCohorts.find((c) => c.slots.length >= requiredSessions) ??
+      groupCohorts[0];
+    setSelectedCohortId(chosen.id);
+    setSelectedSlotIds(chosen.slots.map((s) => s.id));
+  }, [isGroupCourse, groupCohorts, requiredSessions, selectedCohortId]);
+
+  const handleSelectCohort = (cohortId: string) => {
+    const found = groupCohorts.find((c) => c.id === cohortId);
+    if (!found) return;
+    setSlotNotice(null);
+    setSelectedCohortId(found.id);
+    setSelectedSlotIds(found.slots.map((s) => s.id));
+  };
 
   const calendarDays = useMemo(() => {
     const days: { key: string; date: Date }[] = [];
@@ -415,6 +451,10 @@ export function BookingPage() {
 
                 {step === 2 && (
                   <StepSlots
+                    isGroupCourse={isGroupCourse}
+                    groupCohorts={groupCohorts}
+                    selectedCohortId={selectedCohortId}
+                    onSelectCohort={handleSelectCohort}
                     calendarDays={calendarDays}
                     slotsByDay={slotsByDay}
                     selectedDayKey={selectedDayKey}

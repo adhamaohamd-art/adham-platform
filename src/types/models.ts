@@ -176,6 +176,12 @@ export interface Slot {
   endAt: Timestamp | Date;
   status: SlotStatus;
   bookingId: string | null;
+  /** Max students for this slot (1 = private 1-on-1, >1 = group class) */
+  capacity?: number;
+  /** Number of active (pending + confirmed) seats currently taken */
+  bookedCount?: number;
+  /** Booking IDs holding seats on this slot */
+  bookingIds?: string[];
 }
 
 export interface StudentDetails {

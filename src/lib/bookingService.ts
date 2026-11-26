@@ -53,7 +53,7 @@ export class SlotUnavailableError extends Error {
   }
 }
 
-const SLOT_WINDOW_DAYS = 29;
+const SLOT_WINDOW_DAYS = 42;
 
 function mapSlotDocs(docs: { id: string; data: () => unknown }[]): Slot[] {
   return docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Slot, 'id'>) }));
@@ -156,8 +156,16 @@ export async function submitBookingTransaction(
     await runTransaction(db, async (tx) => {
       const slotRefs = input.selectedSlots.map((slot) => doc(db, 'slots', slot.id));
       const slotSnaps = await Promise.all(slotRefs.map((r) => tx.get(r)));
+      const slotUpdates: Array<{
+        ref: (typeof slotRefs)[number];
+        status: 'available' | 'pending';
+        capacity: number;
+        bookedCount: number;
+        bookingIds: string[];
+      }> = [];
 
-      for (const snap of slotSnaps) {
+      for (let i = 0; i < slotSnaps.length; i += 1) {
+        const snap = slotSnaps[i];
         if (!snap.exists()) {
           throw new SlotUnavailableError();
         }
@@ -165,6 +173,21 @@ export async function submitBookingTransaction(
         if (data.status !== 'available') {
           throw new SlotUnavailableError();
         }
+        const cap = typeof data.capacity === 'number' && data.capacity >= 1 ? Math.floor(data.capacity) : 1;
+        const currentBooked = typeof data.bookedCount === 'number' && data.bookedCount >= 0 ? Math.floor(data.bookedCount) : 0;
+        if (currentBooked >= cap) {
+          throw new SlotUnavailableError();
+        }
+        const prevIds: string[] = Array.isArray(data.bookingIds) ? data.bookingIds : [];
+        const nextBooked = currentBooked + 1;
+        const nextStatus: 'available' | 'pending' = nextBooked >= cap ? 'pending' : 'available';
+        slotUpdates.push({
+          ref: slotRefs[i],
+          status: nextStatus,
+          capacity: cap,
+          bookedCount: nextBooked,
+          bookingIds: [...prevIds, bookingId].slice(0, 100),
+        });
       }
 
       tx.set(bookingRef, {
@@ -212,10 +235,13 @@ export async function submitBookingTransaction(
         createdAt: serverTimestamp(),
       });
 
-      for (const slotRef of slotRefs) {
-        tx.update(slotRef, {
-          status: 'pending',
+      for (const upd of slotUpdates) {
+        tx.update(upd.ref, {
+          status: upd.status,
           bookingId,
+          capacity: upd.capacity,
+          bookedCount: upd.bookedCount,
+          bookingIds: upd.bookingIds,
         });
       }
     });
@@ -314,12 +340,20 @@ export async function confirmBookingAsAdmin(booking: Booking, classLink: string)
       classLink: safeLink ?? '',
       rejectionReason: '',
     });
-    for (const slotId of booking.slotIds) {
-      batch.update(doc(db, 'slots', slotId), {
-        status: 'booked',
+    const confirmSlotSnaps = await Promise.all(
+      booking.slotIds.map((slotId) => getDoc(doc(db, 'slots', slotId)))
+    );
+    confirmSlotSnaps.forEach((snap, idx) => {
+      if (!snap.exists()) return;
+      const sData = snap.data();
+      const cap = typeof sData.capacity === 'number' && sData.capacity >= 1 ? Math.floor(sData.capacity) : 1;
+      const booked = typeof sData.bookedCount === 'number' && sData.bookedCount >= 0 ? Math.floor(sData.bookedCount) : 1;
+      const nextStatus = cap > 1 && booked < cap ? 'available' : 'booked';
+      batch.update(doc(db, 'slots', booking.slotIds[idx]), {
+        status: nextStatus,
         bookingId: booking.id,
       });
-    }
+    });
     let autoActivated = false;
     let activationCode: string | null = null;
 
@@ -442,12 +476,23 @@ export async function rejectBookingAsAdmin(
       rejectionReason: cleanReason,
       classLink: '',
     });
-    for (const slotId of booking.slotIds) {
-      batch.update(doc(db, 'slots', slotId), {
+    const rejectSlotSnaps = await Promise.all(
+      booking.slotIds.map((slotId) => getDoc(doc(db, 'slots', slotId)))
+    );
+    rejectSlotSnaps.forEach((snap, idx) => {
+      if (!snap.exists()) return;
+      const sData = snap.data();
+      const currentBooked = typeof sData.bookedCount === 'number' ? Math.floor(sData.bookedCount) : 1;
+      const nextBooked = Math.max(0, currentBooked - 1);
+      const prevIds: string[] = Array.isArray(sData.bookingIds) ? sData.bookingIds : [];
+      const nextIds = prevIds.filter((id) => id !== booking.id);
+      batch.update(doc(db, 'slots', booking.slotIds[idx]), {
         status: 'available',
-        bookingId: null,
+        bookedCount: nextBooked,
+        bookingIds: nextIds,
+        bookingId: nextIds.length > 0 ? nextIds[nextIds.length - 1] : null,
       });
-    }
+    });
     await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `bookings/${booking.id}`);
@@ -504,6 +549,9 @@ export async function seedInitialDatabase(): Promise<{
             endAt: Timestamp.fromDate(toDate(s.endAt)),
             status: 'available',
             bookingId: null,
+            capacity: s.capacity ?? 1,
+            bookedCount: 0,
+            bookingIds: [],
           });
           slotsSeeded += 1;
         }
@@ -514,5 +562,54 @@ export async function seedInitialDatabase(): Promise<{
     return { coursesSeeded, slotsSeeded, testimonialsSeeded };
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'seed');
+  }
+}
+
+/**
+ * Publishes the organized 8-course catalog (Prep 1 → Sec 3 Group Classes + Prep/Sec Private)
+ * and generates their next 4 weeks of conflict-free slots without touching existing bookings.
+ */
+export async function applyStructuredCatalogAsAdmin(): Promise<{
+  coursesUpserted: number;
+  slotsCreated: number;
+}> {
+  let coursesUpserted = 0;
+  let slotsCreated = 0;
+
+  try {
+    const courseBatch = writeBatch(db);
+    for (const course of SEED_COURSES) {
+      const { id, ...rest } = course;
+      courseBatch.set(doc(db, 'courses', id), rest);
+      coursesUpserted += 1;
+    }
+    await courseBatch.commit();
+
+    const existingSlotsSnap = await getDocs(collection(db, 'slots'));
+    const existingIds = new Set(existingSlotsSnap.docs.map((d) => d.id));
+
+    const generated = buildFallbackDemoSlots(SEED_COURSES, 6).filter((s) => !existingIds.has(s.id));
+    for (let i = 0; i < generated.length; i += 400) {
+      const chunk = generated.slice(i, i + 400);
+      const batch = writeBatch(db);
+      for (const s of chunk) {
+        batch.set(doc(db, 'slots', s.id), {
+          courseId: s.courseId,
+          startAt: Timestamp.fromDate(toDate(s.startAt)),
+          endAt: Timestamp.fromDate(toDate(s.endAt)),
+          status: 'available',
+          bookingId: null,
+          capacity: s.capacity ?? 1,
+          bookedCount: 0,
+          bookingIds: [],
+        });
+        slotsCreated += 1;
+      }
+      await batch.commit();
+    }
+
+    return { coursesUpserted, slotsCreated };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'structured_catalog');
   }
 }
